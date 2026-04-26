@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galerie — Salle Voyages</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #canvas-container { width: 100vw; height: 100vh; position: relative; }
+  #info-panel {
+    position: absolute; top: 16px; left: 16px;
+    background: rgba(255,255,255,0.85); color: #1a3a4a;
+    padding: 14px 18px; border-radius: 10px;
+    font-size: 13px; z-index: 10; pointer-events: none;
+    max-width: 300px; line-height: 1.6;
+    backdrop-filter: blur(6px);
+  }
+  #info-panel .title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+  #title-overlay {
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); color: #1a3a4a;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #door-overlay {
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,180,100,0.95); color: #2a1810;
+    padding: 12px 24px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #start-screen {
+    position: absolute; inset: 0; z-index: 20;
+    background: linear-gradient(180deg, #87ceeb 0%, #f4e4bc 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #1a3a4a; text-align: center; cursor: pointer;
+  }
+  #start-screen.hidden { display: none; }
+  #start-screen h1 { font-size: 36px; margin-bottom: 16px; font-weight: 300; letter-spacing: 1px; }
+  #start-screen p { font-size: 15px; opacity: 0.8; margin-bottom: 6px; }
+  #start-screen .cta { margin-top: 28px; padding: 14px 32px; border: 1px solid #1a3a4a; border-radius: 30px; display: inline-block; font-size: 14px; }
+  #fade-overlay {
+    position: absolute; inset: 0; z-index: 30;
+    background: black; opacity: 1; pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  #fade-overlay.fade-in { opacity: 0; }
+  #fade-overlay.active { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="info-panel">
+  <div class="title">✈ Voyages</div>
+  <div>ZQSD ou WASD pour se déplacer</div>
+  <div>Souris pour regarder</div>
+  <div style="margin-top: 8px; opacity: 0.8; font-size: 12px;">Approche la sortie pour retourner au parc</div>
+</div>
+<div id="title-overlay"></div>
+<div id="door-overlay"></div>
+<div id="fade-overlay" class="fade-in"></div>
+<div id="start-screen">
+  <div>
+    <h1>Voyages</h1>
+    <p>Souvenirs d'ailleurs</p>
+    <div class="cta">Cliquer pour entrer</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// PHOTOS DE VOYAGE
+// Mets tes photos dans photos/voyage/
+// ============================================================
+const PHOTOS_VOYAGE = [
+  { src: 'photos/voyage/photo1.jpg', titre: 'Photo 1' },
+  { src: 'photos/voyage/photo2.jpg', titre: 'Photo 2' },
+  { src: 'photos/voyage/photo3.jpg', titre: 'Photo 3' },
+  { src: 'photos/voyage/photo4.jpg', titre: 'Photo 4' },
+  { src: 'photos/voyage/photo5.jpg', titre: 'Photo 5' },
+  { src: 'photos/voyage/photo6.jpg', titre: 'Photo 6' },
+];
+// ============================================================
+
+(function() {
+  const container = document.getElementById('canvas-container');
+  const titleOverlay = document.getElementById('title-overlay');
+  const doorOverlay = document.getElementById('door-overlay');
+  const startScreen = document.getElementById('start-screen');
+  const fadeOverlay = document.getElementById('fade-overlay');
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xb8d8e8);
+  scene.fog = new THREE.Fog(0xb8d8e8, 30, 100);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
+  camera.position.set(0, 1.7, 8);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  container.appendChild(renderer.domElement);
+
+  // Éclairage lumineux extérieur
+  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambient);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+  sun.position.set(20, 30, 10);
+  sun.castShadow = true;
+  scene.add(sun);
+
+  const skyLight = new THREE.HemisphereLight(0xb8d8e8, 0xc0a878, 0.6);
+  scene.add(skyLight);
+
+  // === SOL CLAIR (parquet blanc) ===
+  function makeFloorTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#e8dcc8';
+    ctx.fillRect(0, 0, 512, 512);
+    // Lattes de parquet
+    for (let y = 0; y < 512; y += 64) {
+      const offset = (y / 64) % 2 ? 0 : 256;
+      for (let x = -128; x < 512; x += 256) {
+        const v = 220 + Math.random() * 25;
+        ctx.fillStyle = `rgb(${v|0},${(v-15)|0},${(v-35)|0})`;
+        ctx.fillRect(x + offset + 1, y + 1, 254, 62);
+      }
+      ctx.fillStyle = 'rgba(120,90,60,0.2)';
+      ctx.fillRect(0, y, 512, 1);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makeWallTexture() {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f4f0e8';
+    ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2000; i++) {
+      const v = 230 + Math.random() * 20;
+      ctx.fillStyle = `rgba(${v|0},${(v-5)|0},${(v-15)|0},${Math.random()*0.3})`;
+      ctx.fillRect(Math.random()*256, Math.random()*256, 1+Math.random()*2, 1+Math.random()*2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePlaceholderTexture(idx) {
+    const palettes = [
+      ['#2a9d8f', '#264653', '#e76f51', '#f4a261'],
+      ['#003049', '#d62828', '#f77f00', '#fcbf49'],
+      ['#6a994e', '#a7c957', '#f2e8cf', '#386641'],
+      ['#1d3557', '#457b9d', '#a8dadc', '#f1faee'],
+      ['#bc6c25', '#dda15e', '#fefae0', '#606c38'],
+      ['#7209b7', '#560bad', '#3a0ca3', '#4cc9f0'],
+    ];
+    const p = palettes[idx % palettes.length];
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 500;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = p[0];
+    ctx.fillRect(0, 0, 400, 500);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = p[(i+1) % p.length];
+      ctx.globalAlpha = 0.7 + Math.random()*0.3;
+      ctx.beginPath();
+      ctx.arc(Math.random()*400, Math.random()*500, 50 + Math.random()*120, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Photo ' + (idx+1), 200, 260);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function loadPhoto(src, idx) {
+    const placeholder = makePlaceholderTexture(idx);
+    const mat = new THREE.MeshStandardMaterial({ map: placeholder, roughness: 0.4 });
+    new THREE.TextureLoader().load(src,
+      (tex) => { mat.map = tex; mat.needsUpdate = true; },
+      undefined, () => {}
+    );
+    return mat;
+  }
+
+  const ROOM_W = 18, ROOM_D = 12, ROOM_H = 4.5;
+
+  const floorTex = makeFloorTexture();
+  floorTex.repeat.set(3, 3);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.6 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = ROOM_H;
+  scene.add(ceiling);
+
+  const wallTex = makeWallTexture();
+  wallTex.repeat.set(2, 1);
+  const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 });
+
+  // Mur arrière (avec photos)
+  const wallBack = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_H), wallMat);
+  wallBack.position.set(0, ROOM_H/2, -ROOM_D/2);
+  wallBack.receiveShadow = true;
+  scene.add(wallBack);
+
+  // Mur avant avec porte de sortie
+  const exitW = 1.6, exitH = 2.6;
+  const wallFrontL = new THREE.Mesh(
+    new THREE.PlaneGeometry((ROOM_W - exitW) / 2, ROOM_H),
+    wallMat
+  );
+  wallFrontL.position.set(-(ROOM_W + exitW) / 4, ROOM_H/2, ROOM_D/2);
+  wallFrontL.rotation.y = Math.PI;
+  wallFrontL.receiveShadow = true;
+  scene.add(wallFrontL);
+
+  const wallFrontR = new THREE.Mesh(
+    new THREE.PlaneGeometry((ROOM_W - exitW) / 2, ROOM_H),
+    wallMat
+  );
+  wallFrontR.position.set((ROOM_W + exitW) / 4, ROOM_H/2, ROOM_D/2);
+  wallFrontR.rotation.y = Math.PI;
+  wallFrontR.receiveShadow = true;
+  scene.add(wallFrontR);
+
+  const wallFrontTop = new THREE.Mesh(
+    new THREE.PlaneGeometry(exitW, ROOM_H - exitH),
+    wallMat
+  );
+  wallFrontTop.position.set(0, exitH + (ROOM_H - exitH)/2, ROOM_D/2);
+  wallFrontTop.rotation.y = Math.PI;
+  scene.add(wallFrontTop);
+
+  // === BAIES VITRÉES SUR LES CÔTÉS ===
+  // Murs latéraux : structure haute + basse en blanc, milieu en verre
+  const lowH = 0.8, topH = 0.4;
+  // Mur gauche
+  const wallLeftLow = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, lowH), wallMat);
+  wallLeftLow.position.set(-ROOM_W/2, lowH/2, 0);
+  wallLeftLow.rotation.y = Math.PI/2;
+  scene.add(wallLeftLow);
+  const wallLeftTop = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, topH), wallMat);
+  wallLeftTop.position.set(-ROOM_W/2, ROOM_H - topH/2, 0);
+  wallLeftTop.rotation.y = Math.PI/2;
+  scene.add(wallLeftTop);
+  // Mur droit
+  const wallRightLow = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, lowH), wallMat);
+  wallRightLow.position.set(ROOM_W/2, lowH/2, 0);
+  wallRightLow.rotation.y = -Math.PI/2;
+  scene.add(wallRightLow);
+  const wallRightTop = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, topH), wallMat);
+  wallRightTop.position.set(ROOM_W/2, ROOM_H - topH/2, 0);
+  wallRightTop.rotation.y = -Math.PI/2;
+  scene.add(wallRightTop);
+
+  // Verre (légèrement teinté + reflet)
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xeef4f8,
+    transparent: true,
+    opacity: 0.15,
+    roughness: 0.05,
+    metalness: 0.0,
+    transmission: 0.9,
+    side: THREE.DoubleSide
+  });
+
+  const glassH = ROOM_H - lowH - topH;
+  const glassLeft = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, glassH), glassMat);
+  glassLeft.position.set(-ROOM_W/2 + 0.01, lowH + glassH/2, 0);
+  glassLeft.rotation.y = Math.PI/2;
+  scene.add(glassLeft);
+  const glassRight = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, glassH), glassMat);
+  glassRight.position.set(ROOM_W/2 - 0.01, lowH + glassH/2, 0);
+  glassRight.rotation.y = -Math.PI/2;
+  scene.add(glassRight);
+
+  // Montants des baies (cadres noirs)
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.5 });
+  // Cadres horizontaux
+  for (const side of [-1, 1]) {
+    for (const y of [lowH, ROOM_H - topH]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, ROOM_D), frameMat);
+      bar.position.set(side * ROOM_W/2, y, 0);
+      scene.add(bar);
+    }
+    // Verticaux (espacés)
+    for (let z = -ROOM_D/2; z <= ROOM_D/2; z += 3) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.08, glassH, 0.08), frameMat);
+      bar.position.set(side * ROOM_W/2, lowH + glassH/2, z);
+      scene.add(bar);
+    }
+  }
+
+  // === PAYSAGES À L'EXTÉRIEUR ===
+  // Côté gauche : montagnes / mer
+  // Côté droit : forêt / colline
+
+  function makeMountainBackdrop(side) {
+    // Plane avec dégradé peint pour ciel + montagnes + mer
+    const c = document.createElement('canvas');
+    c.width = 2048; c.height = 1024;
+    const ctx = c.getContext('2d');
+
+    // Ciel dégradé
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, 600);
+    skyGrad.addColorStop(0, '#87bcd8');
+    skyGrad.addColorStop(0.6, '#c8dceb');
+    skyGrad.addColorStop(1, '#e8e0c8');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, 2048, 600);
+
+    // Soleil
+    const sunGrad = ctx.createRadialGradient(1500, 250, 20, 1500, 250, 200);
+    sunGrad.addColorStop(0, 'rgba(255,250,220,1)');
+    sunGrad.addColorStop(0.3, 'rgba(255,235,180,0.6)');
+    sunGrad.addColorStop(1, 'rgba(255,220,150,0)');
+    ctx.fillStyle = sunGrad;
+    ctx.fillRect(1200, 50, 600, 400);
+
+    // Montagnes lointaines (3 couches)
+    const layers = [
+      { color: 'rgba(140,160,180,0.5)', amplitude: 80, base: 500 },
+      { color: 'rgba(110,140,160,0.7)', amplitude: 120, base: 580 },
+      { color: 'rgba(70,100,120,0.9)', amplitude: 160, base: 680 },
+    ];
+    layers.forEach(l => {
+      ctx.fillStyle = l.color;
+      ctx.beginPath();
+      ctx.moveTo(0, 1024);
+      ctx.lineTo(0, l.base);
+      let x = 0;
+      while (x < 2048) {
+        const peakX = x + 100 + Math.random() * 200;
+        const peakY = l.base - Math.random() * l.amplitude;
+        ctx.lineTo(peakX, peakY);
+        x = peakX;
+      }
+      ctx.lineTo(2048, l.base);
+      ctx.lineTo(2048, 1024);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Mer
+    const seaGrad = ctx.createLinearGradient(0, 750, 0, 1024);
+    seaGrad.addColorStop(0, '#4a7090');
+    seaGrad.addColorStop(1, '#2a4860');
+    ctx.fillStyle = seaGrad;
+    ctx.fillRect(0, 750, 2048, 274);
+
+    // Reflets sur la mer
+    for (let i = 0; i < 60; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.3})`;
+      ctx.fillRect(Math.random()*2048, 760 + Math.random()*250, 30+Math.random()*80, 1);
+    }
+
+    return new THREE.CanvasTexture(c);
+  }
+
+  function makeForestBackdrop() {
+    const c = document.createElement('canvas');
+    c.width = 2048; c.height = 1024;
+    const ctx = c.getContext('2d');
+
+    // Ciel
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, 700);
+    skyGrad.addColorStop(0, '#a8c8e0');
+    skyGrad.addColorStop(1, '#e0e8c8');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, 2048, 700);
+
+    // Collines vertes
+    const layers = [
+      { color: 'rgba(140,170,120,0.6)', base: 500 },
+      { color: 'rgba(100,140,80,0.8)', base: 600 },
+      { color: 'rgba(70,110,50,1)', base: 720 },
+    ];
+    layers.forEach(l => {
+      ctx.fillStyle = l.color;
+      ctx.beginPath();
+      ctx.moveTo(0, 1024);
+      let x = 0;
+      while (x < 2048) {
+        const w = 200 + Math.random() * 300;
+        const h = 60 + Math.random() * 80;
+        ctx.quadraticCurveTo(x + w/2, l.base - h, x + w, l.base);
+        x += w;
+      }
+      ctx.lineTo(2048, 1024);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Arbres en silhouettes
+    ctx.fillStyle = 'rgba(40,60,30,0.95)';
+    for (let i = 0; i < 50; i++) {
+      const x = Math.random() * 2048;
+      const y = 750 + Math.random() * 100;
+      const s = 30 + Math.random() * 60;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - s/3, y + s);
+      ctx.lineTo(x + s/3, y + s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(x - 3, y + s, 6, 15);
+    }
+
+    // Sol vert proche
+    ctx.fillStyle = '#5a7a3a';
+    ctx.fillRect(0, 850, 2048, 174);
+
+    return new THREE.CanvasTexture(c);
+  }
+
+  // Paysage côté gauche : mer/montagnes
+  const seaScape = makeMountainBackdrop();
+  const seaBackdrop = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 20),
+    new THREE.MeshBasicMaterial({ map: seaScape })
+  );
+  seaBackdrop.position.set(-ROOM_W/2 - 8, 5, 0);
+  seaBackdrop.rotation.y = Math.PI / 2;
+  scene.add(seaBackdrop);
+
+  // Paysage côté droit : forêt
+  const forestScape = makeForestBackdrop();
+  const forestBackdrop = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 20),
+    new THREE.MeshBasicMaterial({ map: forestScape })
+  );
+  forestBackdrop.position.set(ROOM_W/2 + 8, 5, 0);
+  forestBackdrop.rotation.y = -Math.PI / 2;
+  scene.add(forestBackdrop);
+
+  // Sol extérieur (herbe + chemin)
+  const outerFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(60, 60),
+    new THREE.MeshStandardMaterial({ color: 0x7a8a5a, roughness: 1 })
+  );
+  outerFloor.rotation.x = -Math.PI / 2;
+  outerFloor.position.y = -0.05;
+  scene.add(outerFloor);
+
+  // === PHOTOS SUR LE MUR DU FOND ===
+  const photoMeshes = [];
+  const pictureFrameMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.6 });
+
+  const photoSpots = [
+    { pos: [-6, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [-2, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 2, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 6, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [-3, 2.2, ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+    { pos: [ 3, 2.2, ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+  ];
+
+  photoSpots.forEach((p, i) => {
+    if (i >= PHOTOS_VOYAGE.length) return;
+    const photoData = PHOTOS_VOYAGE[i];
+    const group = new THREE.Group();
+    const pw = 1.5, ph = 2.0;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.12, ph + 0.12, 0.06), pictureFrameMat);
+    group.add(frame);
+    const photoMat = loadPhoto(photoData.src, i);
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
+    photo.position.z = 0.035;
+    photo.userData = { titre: photoData.titre };
+    group.add(photo);
+    photoMeshes.push(photo);
+    group.position.set(...p.pos);
+    group.rotation.set(...p.rot);
+    scene.add(group);
+  });
+
+  // === BANC POUR CONTEMPLER ===
+  const benchWoodMat = new THREE.MeshStandardMaterial({ color: 0x9a7a5a, roughness: 0.7 });
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.4, 0.6), benchWoodMat);
+  bench.position.set(0, 0.2, 0);
+  bench.castShadow = true;
+  scene.add(bench);
+  for (const sx of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.5), benchWoodMat);
+    leg.position.set(sx, 0.2, 0);
+    scene.add(leg);
+  }
+
+  // === PLANTES ===
+  function makePlant(x, z) {
+    const pot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.2, 0.4, 16),
+      new THREE.MeshStandardMaterial({ color: 0xc8b8a8, roughness: 0.8 })
+    );
+    pot.position.set(x, 0.2, z);
+    pot.castShadow = true;
+    scene.add(pot);
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x4a7a3a, roughness: 0.8 });
+    for (let i = 0; i < 8; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), leafMat);
+      leaf.position.set(
+        x + (Math.random()-0.5) * 0.3,
+        0.55 + Math.random() * 0.6,
+        z + (Math.random()-0.5) * 0.3
+      );
+      leaf.scale.set(1, 1.6, 1);
+      scene.add(leaf);
+    }
+  }
+  makePlant(-7, -4);
+  makePlant(7, -4);
+  makePlant(-7, 4);
+  makePlant(7, 4);
+
+  // Encadrement de la porte de sortie (bois clair)
+  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.6 });
+  [
+    [-exitW/2 - 0.05, exitH/2, ROOM_D/2 - 0.01, 0.1, exitH, 0.05],
+    [exitW/2 + 0.05, exitH/2, ROOM_D/2 - 0.01, 0.1, exitH, 0.05],
+    [0, exitH + 0.05, ROOM_D/2 - 0.01, exitW + 0.2, 0.1, 0.05],
+  ].forEach(([fx,fy,fz,fw,fh,fd]) => {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, fd), doorFrameMat);
+    frame.position.set(fx, fy, fz);
+    scene.add(frame);
+  });
+
+  const exitGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(exitW, exitH),
+    new THREE.MeshBasicMaterial({ color: 0xffd498, transparent: true, opacity: 0.5 })
+  );
+  exitGlow.position.set(0, exitH/2, ROOM_D/2 - 0.02);
+  scene.add(exitGlow);
+
+  // === CONTRÔLES ===
+  const keys = {};
+  let pitch = 0, yaw = Math.PI;
+  let pointerLocked = false;
+  const canvas = renderer.domElement;
+
+  function lockPointer() {
+    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+    canvas.requestPointerLock();
+    startScreen.classList.add('hidden');
+  }
+  startScreen.addEventListener('click', lockPointer);
+  canvas.addEventListener('click', lockPointer);
+
+  document.addEventListener('pointerlockchange', () => {
+    pointerLocked = document.pointerLockElement === canvas;
+    if (!pointerLocked) startScreen.classList.remove('hidden');
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!pointerLocked) return;
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+  });
+
+  window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  const raycaster = new THREE.Raycaster();
+  const center = new THREE.Vector2(0, 0);
+
+  let transitioning = false;
+  function transitionTo(url) {
+    if (transitioning) return;
+    transitioning = true;
+    fadeOverlay.classList.remove('fade-in');
+    fadeOverlay.classList.add('active');
+    setTimeout(() => { window.location.href = url; }, 600);
+  }
+
+  setTimeout(() => fadeOverlay.classList.add('fade-in'), 50);
+
+  function updateMovement(dt) {
+    const speed = 4;
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const move = new THREE.Vector3();
+
+    if (keys['KeyW'] || keys['KeyZ'] || keys['ArrowUp']) move.add(forward);
+    if (keys['KeyS'] || keys['ArrowDown']) move.sub(forward);
+    if (keys['KeyA'] || keys['KeyQ'] || keys['ArrowLeft']) move.sub(right);
+    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
+
+    if (move.lengthSq() > 0) {
+      move.normalize().multiplyScalar(speed * dt);
+      camera.position.add(move);
+    }
+
+    const m = 0.6;
+    camera.position.x = Math.max(-ROOM_W/2 + m, Math.min(ROOM_W/2 - m, camera.position.x));
+    if (Math.abs(camera.position.x) < exitW/2 - 0.1 && camera.position.z > ROOM_D/2 - 0.5) {
+      transitionTo('index.html');
+    }
+    camera.position.z = Math.max(-ROOM_D/2 + m, Math.min(ROOM_D/2 - 0.1, camera.position.z));
+    camera.position.y = 1.7;
+
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+
+    if (Math.abs(camera.position.x) < 1.5 && camera.position.z > ROOM_D/2 - 2) {
+      doorOverlay.textContent = '← Retour au parc';
+      doorOverlay.style.opacity = '1';
+    } else {
+      doorOverlay.style.opacity = '0';
+    }
+  }
+
+  function checkHover() {
+    raycaster.setFromCamera(center, camera);
+    const hits = raycaster.intersectObjects(photoMeshes);
+    if (hits.length > 0 && hits[0].distance < 4) {
+      titleOverlay.textContent = hits[0].object.userData.titre;
+      titleOverlay.style.opacity = '1';
+    } else {
+      titleOverlay.style.opacity = '0';
+    }
+  }
+
+  let lastTime = performance.now();
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    updateMovement(dt);
+    checkHover();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+</script>
+</body>
+</html>

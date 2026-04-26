@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galerie — Salle Noir & Blanc</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #canvas-container { width: 100vw; height: 100vh; position: relative; }
+  #info-panel {
+    position: absolute; top: 16px; left: 16px;
+    background: rgba(0,0,0,0.7); color: white;
+    padding: 14px 18px; border-radius: 10px;
+    font-size: 13px; z-index: 10; pointer-events: none;
+    max-width: 300px; line-height: 1.6;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  #info-panel .title { font-weight: 600; margin-bottom: 8px; font-size: 14px; letter-spacing: 1px; }
+  #title-overlay {
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); color: white;
+    padding: 10px 20px; border-radius: 4px;
+    font-size: 14px; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  #door-overlay {
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); color: #000;
+    padding: 12px 24px; border-radius: 4px;
+    font-size: 14px; font-weight: 600; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #start-screen {
+    position: absolute; inset: 0; z-index: 20;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    color: white; text-align: center; cursor: pointer;
+  }
+  #start-screen.hidden { display: none; }
+  #start-screen h1 { font-size: 32px; margin-bottom: 16px; font-weight: 200; letter-spacing: 4px; }
+  #start-screen p { font-size: 15px; opacity: 0.7; margin-bottom: 6px; letter-spacing: 1px; }
+  #start-screen .cta { margin-top: 28px; padding: 14px 32px; border: 1px solid white; border-radius: 0; display: inline-block; font-size: 14px; letter-spacing: 2px; }
+  #fade-overlay {
+    position: absolute; inset: 0; z-index: 30;
+    background: black; opacity: 1; pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  #fade-overlay.fade-in { opacity: 0; }
+  #fade-overlay.active { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="info-panel">
+  <div class="title">◼ NOIR &amp; BLANC</div>
+  <div>ZQSD ou WASD pour se déplacer</div>
+  <div>Souris pour regarder</div>
+  <div style="margin-top: 8px; opacity: 0.7; font-size: 12px;">Approche la sortie pour retourner au parc</div>
+</div>
+<div id="title-overlay"></div>
+<div id="door-overlay"></div>
+<div id="fade-overlay" class="fade-in"></div>
+<div id="start-screen">
+  <div>
+    <h1>NOIR &amp; BLANC</h1>
+    <p>Une galerie en monochrome</p>
+    <div class="cta">ENTRER</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// PHOTOS NOIR ET BLANC
+// Mets tes photos dans photos/nb/
+// ============================================================
+const PHOTOS_NB = [
+  { src: 'photos/nb/photo1.jpg', titre: 'Photo 1' },
+  { src: 'photos/nb/photo2.jpg', titre: 'Photo 2' },
+  { src: 'photos/nb/photo3.jpg', titre: 'Photo 3' },
+  { src: 'photos/nb/photo4.jpg', titre: 'Photo 4' },
+  { src: 'photos/nb/photo5.jpg', titre: 'Photo 5' },
+  { src: 'photos/nb/photo6.jpg', titre: 'Photo 6' },
+  { src: 'photos/nb/photo7.jpg', titre: 'Photo 7' },
+  { src: 'photos/nb/photo8.jpg', titre: 'Photo 8' },
+];
+// ============================================================
+
+(function() {
+  const container = document.getElementById('canvas-container');
+  const titleOverlay = document.getElementById('title-overlay');
+  const doorOverlay = document.getElementById('door-overlay');
+  const startScreen = document.getElementById('start-screen');
+  const fadeOverlay = document.getElementById('fade-overlay');
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0a0a);
+  scene.fog = new THREE.Fog(0x0a0a0a, 10, 30);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.7, 8);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.15);
+  scene.add(ambient);
+
+  function makeConcreteTexture(dark = false) {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    const base = dark ? 30 : 230;
+    ctx.fillStyle = `rgb(${base},${base},${base})`;
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 6000; i++) {
+      const v = base + (Math.random() - 0.5) * 30;
+      ctx.fillStyle = `rgba(${v|0},${v|0},${v|0},${Math.random()*0.4})`;
+      ctx.fillRect(Math.random()*512, Math.random()*512, 1+Math.random()*2, 1+Math.random()*2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePlaceholderTextureBW(idx) {
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 500;
+    const ctx = c.getContext('2d');
+    const grays = [40, 80, 120, 160, 200];
+    ctx.fillStyle = `rgb(${grays[idx % grays.length]},${grays[idx % grays.length]},${grays[idx % grays.length]})`;
+    ctx.fillRect(0, 0, 400, 500);
+    for (let i = 0; i < 4; i++) {
+      const v = Math.floor(Math.random() * 200) + 30;
+      ctx.fillStyle = `rgba(${v},${v},${v},${0.5 + Math.random()*0.4})`;
+      ctx.beginPath();
+      ctx.arc(Math.random()*400, Math.random()*500, 50 + Math.random()*120, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = '300 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Photo ' + (idx+1), 200, 260);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function loadPhotoTextureBW(src, idx) {
+    const placeholder = makePlaceholderTextureBW(idx);
+    const mat = new THREE.MeshStandardMaterial({ map: placeholder, roughness: 0.4 });
+    new THREE.TextureLoader().load(src,
+      (tex) => { mat.map = tex; mat.needsUpdate = true; },
+      undefined, () => {}
+    );
+    return mat;
+  }
+
+  const ROOM_W = 16, ROOM_D = 12, ROOM_H = 4.5;
+
+  // Sol noir poli
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({
+      color: 0x1a1a1a,
+      roughness: 0.3,
+      metalness: 0.4
+    })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Plafond noir
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = ROOM_H;
+  scene.add(ceiling);
+
+  // Murs blancs cassés
+  const wallTex = makeConcreteTexture(false);
+  wallTex.repeat.set(2, 1);
+  const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 });
+
+  function makeWall(w, h) { return new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat); }
+  const wallBack = makeWall(ROOM_W, ROOM_H);
+  wallBack.position.set(0, ROOM_H/2, -ROOM_D/2);
+  wallBack.receiveShadow = true;
+  scene.add(wallBack);
+
+  // Mur avant avec ouverture pour la sortie
+  const exitW = 1.6, exitH = 2.6;
+  const wallFrontL = new THREE.Mesh(
+    new THREE.PlaneGeometry((ROOM_W - exitW) / 2, ROOM_H),
+    wallMat
+  );
+  wallFrontL.position.set(-(ROOM_W + exitW) / 4, ROOM_H/2, ROOM_D/2);
+  wallFrontL.rotation.y = Math.PI;
+  wallFrontL.receiveShadow = true;
+  scene.add(wallFrontL);
+
+  const wallFrontR = new THREE.Mesh(
+    new THREE.PlaneGeometry((ROOM_W - exitW) / 2, ROOM_H),
+    wallMat
+  );
+  wallFrontR.position.set((ROOM_W + exitW) / 4, ROOM_H/2, ROOM_D/2);
+  wallFrontR.rotation.y = Math.PI;
+  wallFrontR.receiveShadow = true;
+  scene.add(wallFrontR);
+
+  const wallFrontTop = new THREE.Mesh(
+    new THREE.PlaneGeometry(exitW, ROOM_H - exitH),
+    wallMat
+  );
+  wallFrontTop.position.set(0, exitH + (ROOM_H - exitH)/2, ROOM_D/2);
+  wallFrontTop.rotation.y = Math.PI;
+  wallFrontTop.receiveShadow = true;
+  scene.add(wallFrontTop);
+
+  const wallLeft = makeWall(ROOM_D, ROOM_H);
+  wallLeft.position.set(-ROOM_W/2, ROOM_H/2, 0);
+  wallLeft.rotation.y = Math.PI/2;
+  wallLeft.receiveShadow = true;
+  scene.add(wallLeft);
+
+  const wallRight = makeWall(ROOM_D, ROOM_H);
+  wallRight.position.set(ROOM_W/2, ROOM_H/2, 0);
+  wallRight.rotation.y = -Math.PI/2;
+  wallRight.receiveShadow = true;
+  scene.add(wallRight);
+
+  // === NÉONS AU PLAFOND ===
+  // Tubes néon horizontaux
+  function makeNeon(x, z, length, color = 0xffffff) {
+    const tubeMat = new THREE.MeshStandardMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 2.5
+    });
+    const tube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, length, 8),
+      tubeMat
+    );
+    tube.rotation.z = Math.PI / 2;
+    tube.position.set(x, ROOM_H - 0.3, z);
+    scene.add(tube);
+
+    // Halo
+    const halo = new THREE.Mesh(
+      new THREE.PlaneGeometry(length, 0.3),
+      new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      })
+    );
+    halo.position.set(x, ROOM_H - 0.35, z);
+    scene.add(halo);
+
+    // Lumière réelle
+    const light = new THREE.RectAreaLight(color, 6, length, 0.3);
+    light.position.set(x, ROOM_H - 0.4, z);
+    light.lookAt(x, 0, z);
+    scene.add(light);
+
+    return tube;
+  }
+
+  // Néons principaux blancs
+  for (const z of [-3, 0, 3]) {
+    makeNeon(0, z, ROOM_W * 0.85, 0xffffff);
+  }
+
+  // Néon accent rose vif sur un mur (juste pour le style)
+  const accentNeon = makeNeon(0, -ROOM_D/2 + 0.1, ROOM_W * 0.7, 0xff3388);
+  accentNeon.position.y = 0.5;
+  accentNeon.rotation.z = 0;
+  accentNeon.rotation.y = Math.PI / 2;
+
+  // === SPOTS SUR LES CADRES ===
+  const photoMeshes = [];
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.5, metalness: 0.3 });
+
+  // Positions des photos
+  const photoSpots = [
+    { pos: [-5, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 0, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 5, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [-ROOM_W/2 + 0.05, 2.2, -3], rot: [0, Math.PI/2, 0] },
+    { pos: [-ROOM_W/2 + 0.05, 2.2, 3], rot: [0, Math.PI/2, 0] },
+    { pos: [ ROOM_W/2 - 0.05, 2.2, -3], rot: [0, -Math.PI/2, 0] },
+    { pos: [ ROOM_W/2 - 0.05, 2.2, 3], rot: [0, -Math.PI/2, 0] },
+    { pos: [-5, 2.2, ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+  ];
+
+  photoSpots.forEach((p, i) => {
+    if (i >= PHOTOS_NB.length) return;
+    const photoData = PHOTOS_NB[i];
+    const group = new THREE.Group();
+    const pw = 1.4, ph = 1.8;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.1, ph + 0.1, 0.06), frameMat);
+    group.add(frame);
+    const photoMat = loadPhotoTextureBW(photoData.src, i);
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
+    photo.position.z = 0.035;
+    photo.userData = { titre: photoData.titre };
+    group.add(photo);
+    photoMeshes.push(photo);
+    group.position.set(...p.pos);
+    group.rotation.set(...p.rot);
+    scene.add(group);
+
+    // Petit spot sur le cadre
+    const spot = new THREE.SpotLight(0xffffff, 1.2, 5, Math.PI/7, 0.5, 1.5);
+    spot.position.set(p.pos[0] * 0.5, ROOM_H - 0.6, p.pos[2] * 0.5);
+    spot.target = group;
+    scene.add(spot);
+    scene.add(spot.target);
+  });
+
+  // === BANC EN MILIEU DE SALLE (pour s'asseoir et regarder) ===
+  const benchMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.3 });
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 0.5), benchMat);
+  bench.position.set(0, 0.2, 0);
+  bench.castShadow = true;
+  scene.add(bench);
+
+  // === BORDURE DE LA PORTE DE SORTIE ===
+  const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.5 });
+  [
+    [-exitW/2 - 0.05, exitH/2, ROOM_D/2 - 0.01, 0.1, exitH, 0.05],
+    [exitW/2 + 0.05, exitH/2, ROOM_D/2 - 0.01, 0.1, exitH, 0.05],
+    [0, exitH + 0.05, ROOM_D/2 - 0.01, exitW + 0.2, 0.1, 0.05],
+  ].forEach(([fx,fy,fz,fw,fh,fd]) => {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, fd), doorFrameMat);
+    frame.position.set(fx, fy, fz);
+    scene.add(frame);
+  });
+
+  // Lueur orangée à travers la porte (parc à l'extérieur)
+  const exitGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(exitW, exitH),
+    new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0.4 })
+  );
+  exitGlow.position.set(0, exitH/2, ROOM_D/2 - 0.02);
+  scene.add(exitGlow);
+
+  // === CONTRÔLES ===
+  const keys = {};
+  let pitch = 0, yaw = Math.PI; // tourné vers le fond au démarrage
+  let pointerLocked = false;
+  const canvas = renderer.domElement;
+
+  function lockPointer() {
+    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+    canvas.requestPointerLock();
+    startScreen.classList.add('hidden');
+  }
+  startScreen.addEventListener('click', lockPointer);
+  canvas.addEventListener('click', lockPointer);
+
+  document.addEventListener('pointerlockchange', () => {
+    pointerLocked = document.pointerLockElement === canvas;
+    if (!pointerLocked) startScreen.classList.remove('hidden');
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!pointerLocked) return;
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+  });
+
+  window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  const raycaster = new THREE.Raycaster();
+  const center = new THREE.Vector2(0, 0);
+
+  let transitioning = false;
+  function transitionTo(url) {
+    if (transitioning) return;
+    transitioning = true;
+    fadeOverlay.classList.remove('fade-in');
+    fadeOverlay.classList.add('active');
+    setTimeout(() => { window.location.href = url; }, 600);
+  }
+
+  // Démarrer avec le fade-in
+  setTimeout(() => fadeOverlay.classList.add('fade-in'), 50);
+
+  function updateMovement(dt) {
+    const speed = 4;
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const move = new THREE.Vector3();
+
+    if (keys['KeyW'] || keys['KeyZ'] || keys['ArrowUp']) move.add(forward);
+    if (keys['KeyS'] || keys['ArrowDown']) move.sub(forward);
+    if (keys['KeyA'] || keys['KeyQ'] || keys['ArrowLeft']) move.sub(right);
+    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
+
+    if (move.lengthSq() > 0) {
+      move.normalize().multiplyScalar(speed * dt);
+      camera.position.add(move);
+    }
+
+    const m = 0.6;
+    camera.position.x = Math.max(-ROOM_W/2 + m, Math.min(ROOM_W/2 - m, camera.position.x));
+    // Permet de sortir par la porte
+    if (Math.abs(camera.position.x) < exitW/2 - 0.1 && camera.position.z > ROOM_D/2 - 0.5) {
+      transitionTo('index.html');
+    }
+    camera.position.z = Math.max(-ROOM_D/2 + m, Math.min(ROOM_D/2 - 0.1, camera.position.z));
+    camera.position.y = 1.7;
+
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+
+    // Indicateur de proximité de la sortie
+    if (Math.abs(camera.position.x) < 1.5 && camera.position.z > ROOM_D/2 - 2) {
+      doorOverlay.textContent = '← Retour au parc';
+      doorOverlay.style.opacity = '1';
+    } else {
+      doorOverlay.style.opacity = '0';
+    }
+  }
+
+  function checkHover() {
+    raycaster.setFromCamera(center, camera);
+    const hits = raycaster.intersectObjects(photoMeshes);
+    if (hits.length > 0 && hits[0].distance < 4) {
+      titleOverlay.textContent = hits[0].object.userData.titre;
+      titleOverlay.style.opacity = '1';
+    } else {
+      titleOverlay.style.opacity = '0';
+    }
+  }
+
+  let lastTime = performance.now();
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    updateMovement(dt);
+    checkHover();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+</script>
+</body>
+</html>
