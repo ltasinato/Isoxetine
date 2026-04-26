@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ma galerie 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #canvas-container { width: 100vw; height: 100vh; position: relative; }
+  #info-panel {
+    position: absolute; top: 16px; left: 16px;
+    background: rgba(0,0,0,0.75); color: white;
+    padding: 14px 18px; border-radius: 10px;
+    font-size: 13px; z-index: 10; pointer-events: none;
+    max-width: 300px; line-height: 1.6;
+  }
+  #info-panel .title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+  #title-overlay {
+    position: absolute; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); color: white;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 14px; z-index: 10; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #start-screen {
+    position: absolute; inset: 0; z-index: 20;
+    background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    color: white; text-align: center; cursor: pointer;
+  }
+  #start-screen.hidden { display: none; }
+  #start-screen h1 { font-size: 28px; margin-bottom: 12px; font-weight: 500; }
+  #start-screen p { font-size: 15px; opacity: 0.85; margin-bottom: 6px; }
+  #start-screen .cta { margin-top: 24px; padding: 12px 28px; border: 1px solid white; border-radius: 6px; display: inline-block; }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+<div id="info-panel">
+  <div class="title">Ma galerie 3D</div>
+  <div>ZQSD ou WASD pour se déplacer</div>
+  <div>Souris pour regarder</div>
+  <div>Échap pour libérer la souris</div>
+</div>
+<div id="title-overlay"></div>
+<div id="start-screen">
+  <div>
+    <h1>Bienvenue dans ma galerie</h1>
+    <p>Déplacement : ZQSD / WASD</p>
+    <p>Regarder : souris</p>
+    <p>Sortir : Échap</p>
+    <div class="cta">Cliquer pour entrer</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// CONFIGURATION DE TES PHOTOS
+// Remplace simplement les chemins et titres ci-dessous.
+// Mets tes photos dans un dossier "photos/" à côté de ce fichier.
+// ============================================================
+const MES_PHOTOS = [
+  { src: 'photos/photo1.jpg', titre: 'Titre de la photo 1' },
+  { src: 'photos/photo2.jpg', titre: 'Titre de la photo 2' },
+  { src: 'photos/photo3.jpg', titre: 'Titre de la photo 3' },
+  { src: 'photos/photo4.jpg', titre: 'Titre de la photo 4' },
+  { src: 'photos/photo5.jpg', titre: 'Titre de la photo 5' },
+  { src: 'photos/photo6.jpg', titre: 'Titre de la photo 6' },
+  { src: 'photos/photo7.jpg', titre: 'Titre de la photo 7' },
+  { src: 'photos/photo8.jpg', titre: 'Titre de la photo 8' },
+];
+// ============================================================
+
+(function() {
+  const container = document.getElementById('canvas-container');
+  const titleOverlay = document.getElementById('title-overlay');
+  const startScreen = document.getElementById('start-screen');
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1612);
+  scene.fog = new THREE.Fog(0x1a1612, 8, 35);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.7, 8);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xfff0e0, 0.25);
+  scene.add(ambient);
+
+  function makeBrickTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#3a2820';
+    ctx.fillRect(0, 0, 512, 512);
+    const bw = 64, bh = 24;
+    for (let y = 0; y < 512; y += bh) {
+      const offset = (Math.floor(y / bh) % 2) * (bw / 2);
+      for (let x = -bw; x < 512; x += bw) {
+        const r = 90 + Math.random() * 40;
+        const g = 50 + Math.random() * 25;
+        const b = 35 + Math.random() * 20;
+        ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+        ctx.fillRect(x + offset + 1, y + 1, bw - 2, bh - 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.fillRect(x + offset, y, 1, bh);
+        ctx.fillRect(x + offset, y, bw, 1);
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makeConcreteTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#4a4a48';
+    ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 8000; i++) {
+      const v = 60 + Math.random() * 40;
+      ctx.fillStyle = `rgba(${v|0},${v|0},${(v-5)|0},${Math.random()*0.6})`;
+      ctx.fillRect(Math.random()*512, Math.random()*512, 1+Math.random()*2, 1+Math.random()*2);
+    }
+    for (let i = 0; i < 30; i++) {
+      ctx.fillStyle = `rgba(20,20,20,${Math.random()*0.15})`;
+      ctx.beginPath();
+      ctx.arc(Math.random()*512, Math.random()*512, 10+Math.random()*40, 0, Math.PI*2);
+      ctx.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function makePlaceholderTexture(idx) {
+    const palettes = [
+      ['#d4654a', '#f4a261', '#e9c46a', '#264653'],
+      ['#2a9d8f', '#264653', '#e76f51', '#f4a261'],
+      ['#6a994e', '#a7c957', '#f2e8cf', '#bc4749'],
+      ['#003049', '#d62828', '#f77f00', '#fcbf49'],
+      ['#7209b7', '#3a0ca3', '#4361ee', '#4cc9f0'],
+      ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec'],
+      ['#1d3557', '#457b9d', '#a8dadc', '#f1faee'],
+      ['#5f0f40', '#9a031e', '#fb8b24', '#e36414'],
+    ];
+    const p = palettes[idx % palettes.length];
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 500;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = p[0];
+    ctx.fillRect(0, 0, 400, 500);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = p[(i+1) % p.length];
+      ctx.globalAlpha = 0.7 + Math.random()*0.3;
+      ctx.beginPath();
+      ctx.arc(Math.random()*400, Math.random()*500, 50 + Math.random()*120, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Photo ' + (idx+1), 200, 250);
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Photo manquante', 200, 280);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function loadPhotoTexture(src, idx) {
+    const loader = new THREE.TextureLoader();
+    const placeholder = makePlaceholderTexture(idx);
+    const mat = new THREE.MeshStandardMaterial({
+      map: placeholder,
+      roughness: 0.4,
+      emissive: 0x222222,
+      emissiveIntensity: 0.15
+    });
+    loader.load(
+      src,
+      (tex) => { mat.map = tex; mat.needsUpdate = true; },
+      undefined,
+      () => { /* keep placeholder on error */ }
+    );
+    return mat;
+  }
+
+  const brickTex = makeBrickTexture();
+  brickTex.repeat.set(4, 2);
+  const concreteTex = makeConcreteTexture();
+  concreteTex.repeat.set(4, 4);
+
+  const ROOM_W = 18, ROOM_D = 14, ROOM_H = 5;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.9 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+    new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 1 })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = ROOM_H;
+  scene.add(ceiling);
+
+  const wallMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.95 });
+  function makeWall(w, h) { return new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat); }
+
+  const wallBack = makeWall(ROOM_W, ROOM_H);
+  wallBack.position.set(0, ROOM_H/2, -ROOM_D/2);
+  scene.add(wallBack);
+  const wallFront = makeWall(ROOM_W, ROOM_H);
+  wallFront.position.set(0, ROOM_H/2, ROOM_D/2);
+  wallFront.rotation.y = Math.PI;
+  scene.add(wallFront);
+  const wallLeft = makeWall(ROOM_D, ROOM_H);
+  wallLeft.position.set(-ROOM_W/2, ROOM_H/2, 0);
+  wallLeft.rotation.y = Math.PI/2;
+  scene.add(wallLeft);
+  const wallRight = makeWall(ROOM_D, ROOM_H);
+  wallRight.position.set(ROOM_W/2, ROOM_H/2, 0);
+  wallRight.rotation.y = -Math.PI/2;
+  scene.add(wallRight);
+
+  const beamMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7, roughness: 0.5 });
+  for (let i = -2; i <= 2; i++) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.3, 0.3), beamMat);
+    beam.position.set(0, ROOM_H - 0.15, i * 3);
+    scene.add(beam);
+  }
+
+  const photoPositions = [
+    { pos: [-5, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 0, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [ 5, 2.2, -ROOM_D/2 + 0.05], rot: [0, 0, 0] },
+    { pos: [-5, 2.2,  ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+    { pos: [ 0, 2.2,  ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+    { pos: [ 5, 2.2,  ROOM_D/2 - 0.05], rot: [0, Math.PI, 0] },
+    { pos: [-ROOM_W/2 + 0.05, 2.2, 0], rot: [0, Math.PI/2, 0] },
+    { pos: [ ROOM_W/2 - 0.05, 2.2, 0], rot: [0, -Math.PI/2, 0] },
+  ];
+
+  const photoMeshes = [];
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6, metalness: 0.3 });
+
+  photoPositions.forEach((p, i) => {
+    const photoData = MES_PHOTOS[i] || { src: '', titre: 'Photo ' + (i+1) };
+    const group = new THREE.Group();
+    const pw = 1.6, ph = 2.0;
+
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(pw + 0.15, ph + 0.15, 0.08), frameMat);
+    group.add(frame);
+
+    const photoMat = loadPhotoTexture(photoData.src, i);
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
+    photo.position.z = 0.045;
+    photo.userData = { titre: photoData.titre };
+    group.add(photo);
+    photoMeshes.push(photo);
+
+    group.position.set(...p.pos);
+    group.rotation.set(...p.rot);
+    scene.add(group);
+
+    const spot = new THREE.SpotLight(0xfff0d0, 1.8, 8, Math.PI/6, 0.4, 1.5);
+    spot.position.set(p.pos[0] * 0.6, ROOM_H - 0.5, p.pos[2] * 0.6);
+    spot.target = group;
+    scene.add(spot);
+    scene.add(spot.target);
+  });
+
+  // Mobilier
+  const sofaMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.7 });
+  const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 0.9), sofaMat);
+  sofaBase.position.set(0, 0.3, 0);
+  scene.add(sofaBase);
+  const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 0.2), sofaMat);
+  sofaBack.position.set(0, 0.85, -0.35);
+  scene.add(sofaBack);
+  for (let i = -1; i <= 1; i++) {
+    const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 0.7), sofaMat);
+    cushion.position.set(i * 0.75, 0.65, 0.05);
+    scene.add(cushion);
+  }
+
+  const tableTop = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.08, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.6 })
+  );
+  tableTop.position.set(0, 0.5, 1.3);
+  scene.add(tableTop);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.4 });
+  [[-0.5, 0.25, 1.05], [0.5, 0.25, 1.05], [-0.5, 0.25, 1.55], [0.5, 0.25, 1.55]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.05), legMat);
+    leg.position.set(...p);
+    scene.add(leg);
+  });
+
+  function makePlant(x, z) {
+    const pot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.25, 0.5, 16),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 })
+    );
+    pot.position.set(x, 0.25, z);
+    scene.add(pot);
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.8 });
+    for (let i = 0; i < 7; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), leafMat);
+      leaf.position.set(x + (Math.random()-0.5)*0.4, 0.7 + Math.random()*0.5, z + (Math.random()-0.5)*0.4);
+      leaf.scale.set(1, 1.5, 1);
+      scene.add(leaf);
+    }
+  }
+  makePlant(-7, -5); makePlant(7, -5); makePlant(-7, 5); makePlant(7, 5);
+
+  for (let i = -1; i <= 1; i++) {
+    const cord = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.01, 0.01, 1.2, 6),
+      new THREE.MeshStandardMaterial({ color: 0x111111 })
+    );
+    cord.position.set(i * 3, ROOM_H - 0.6 - 0.6, 0);
+    scene.add(cord);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffaa44, emissiveIntensity: 1.2 })
+    );
+    bulb.position.set(i * 3, ROOM_H - 1.2, 0);
+    scene.add(bulb);
+    const pl = new THREE.PointLight(0xffaa55, 0.9, 8, 1.5);
+    pl.position.set(i * 3, ROOM_H - 1.2, 0);
+    scene.add(pl);
+  }
+
+  // Contrôles FPS
+  const keys = {};
+  let pitch = 0, yaw = 0;
+  let pointerLocked = false;
+
+  const canvas = renderer.domElement;
+
+  function lockPointer() {
+    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+    canvas.requestPointerLock();
+    startScreen.classList.add('hidden');
+  }
+
+  startScreen.addEventListener('click', lockPointer);
+  canvas.addEventListener('click', lockPointer);
+
+  document.addEventListener('pointerlockchange', () => {
+    pointerLocked = document.pointerLockElement === canvas;
+    if (!pointerLocked) startScreen.classList.remove('hidden');
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!pointerLocked) return;
+    yaw -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+  });
+
+  window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  const raycaster = new THREE.Raycaster();
+  const center = new THREE.Vector2(0, 0);
+
+  function updateMovement(dt) {
+    const speed = 4;
+    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const move = new THREE.Vector3();
+
+    if (keys['KeyW'] || keys['KeyZ'] || keys['ArrowUp']) move.add(forward);
+    if (keys['KeyS'] || keys['ArrowDown']) move.sub(forward);
+    if (keys['KeyA'] || keys['KeyQ'] || keys['ArrowLeft']) move.sub(right);
+    if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
+
+    if (move.lengthSq() > 0) {
+      move.normalize().multiplyScalar(speed * dt);
+      camera.position.add(move);
+    }
+
+    const m = 0.6;
+    camera.position.x = Math.max(-ROOM_W/2 + m, Math.min(ROOM_W/2 - m, camera.position.x));
+    camera.position.z = Math.max(-ROOM_D/2 + m, Math.min(ROOM_D/2 - m, camera.position.z));
+    camera.position.y = 1.7;
+
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+  }
+
+  function checkHover() {
+    raycaster.setFromCamera(center, camera);
+    const hits = raycaster.intersectObjects(photoMeshes);
+    if (hits.length > 0 && hits[0].distance < 4) {
+      titleOverlay.textContent = hits[0].object.userData.titre;
+      titleOverlay.style.opacity = '1';
+    } else {
+      titleOverlay.style.opacity = '0';
+    }
+  }
+
+  let lastTime = performance.now();
+  function animate() {
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    updateMovement(dt);
+    checkHover();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+</script>
+</body>
+</html>
