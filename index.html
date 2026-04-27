@@ -386,6 +386,7 @@ const PHOTOS_COULEURS = [
 
   // Plinthes (bois plus sombre au pied des murs)
   const baseboardMat = new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.5 });
+  const BB_HEIGHT = 0.22;  // hauteur des plinthes (suffisamment haute pour masquer les jonctions)
 
   // Murs lobby — papier peint bordeaux/brun chaud
   const lobbyWallpaper = makeWallpaperTexture('#3a1f15');
@@ -410,10 +411,10 @@ const PHOTOS_COULEURS = [
   // Plinthes lobby (sur les 4 murs)
   function addBaseboard(width, x, z, rotY) {
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.15, 0.05),
+      new THREE.BoxGeometry(width, BB_HEIGHT, 0.05),
       baseboardMat
     );
-    bb.position.set(x, 0.075, z);
+    bb.position.set(x, BB_HEIGHT/2, z);
     bb.rotation.y = rotY;
     scene.add(bb);
   }
@@ -479,13 +480,13 @@ const PHOTOS_COULEURS = [
 
     // Plinthes côté lobby pour les 2 segments
     const bb1 = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.15, segLen),
+      new THREE.BoxGeometry(0.05, BB_HEIGHT, segLen),
       baseboardMat
     );
-    bb1.position.set(xPos - wallSide * 0.025, 0.075, -LOBBY_D/2 + segLen/2);
+    bb1.position.set(xPos - wallSide * 0.025, BB_HEIGHT/2, -LOBBY_D/2 + segLen/2);
     scene.add(bb1);
     const bb2 = bb1.clone();
-    bb2.position.set(xPos - wallSide * 0.025, 0.075, LOBBY_D/2 - segLen/2);
+    bb2.position.set(xPos - wallSide * 0.025, BB_HEIGHT/2, LOBBY_D/2 - segLen/2);
     scene.add(bb2);
   }
   makeWallWithDoor(-1, NB_D);  // mur gauche du lobby (vers N&B)
@@ -788,10 +789,10 @@ const PHOTOS_COULEURS = [
 
   function addNbBaseboard(width, x, z, rotY) {
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.12, 0.04),
+      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
       nbBaseboardMat
     );
-    bb.position.set(x, 0.06, z);
+    bb.position.set(x, BB_HEIGHT/2, z);
     bb.rotation.y = rotY;
     scene.add(bb);
   }
@@ -806,31 +807,11 @@ const PHOTOS_COULEURS = [
   addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2, Math.PI/2);
   addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2, Math.PI/2);
 
-  // === ÉCLAIRAGE NB : très sombre, presque noir, seules les photos sont éclairées ===
-  const nbAmbient = new THREE.AmbientLight(0x6070a0, 0.04);
+  // === ÉCLAIRAGE NB : noir total, seuls les projecteurs sur les tableaux éclairent ===
+  const nbAmbient = new THREE.AmbientLight(0x404050, 0.015);
   scene.add(nbAmbient);
-
-  // Petite lumière d'appoint au plafond, très faible (juste pour qu'on devine la pièce)
-  const nbDimLight = new THREE.PointLight(0x8090b0, 0.2, 8, 2);
-  nbDimLight.position.set(NB_CENTER_X, NB_H - 0.2, NB_CENTER_Z);
-  scene.add(nbDimLight);
-
-  // Bandeau LED bleuté très discret au sol (juste pour matérialiser les murs dans le noir)
-  function makeLEDStrip(x, y, z, length, rotY, color) {
-    const strip = new THREE.Mesh(
-      new THREE.BoxGeometry(length, 0.04, 0.025),
-      new THREE.MeshBasicMaterial({ color: color })
-    );
-    strip.position.set(x, y, z);
-    strip.rotation.y = rotY;
-    scene.add(strip);
-    const pl = new THREE.PointLight(color, 0.15, 2.5, 1.8);
-    pl.position.set(x, y, z);
-    scene.add(pl);
-  }
-  makeLEDStrip(NB_CENTER_X - NB_W/2 + 0.05, 0.08, NB_CENTER_Z, NB_D - 1, 0, 0x4466cc);
-  makeLEDStrip(NB_CENTER_X, 0.08, NB_CENTER_Z - NB_D/2 + 0.05, NB_W - 1, Math.PI/2, 0x4466cc);
-  makeLEDStrip(NB_CENTER_X, 0.08, NB_CENTER_Z + NB_D/2 - 0.05, NB_W - 1, Math.PI/2, 0x4466cc);
+  // Pas de lumière d'appoint au plafond — la salle est éteinte
+  // Pas de bandeau LED au sol non plus (retiré sur demande)
 
   // Banc minimaliste blanc au centre
   const nbBench = new THREE.Mesh(
@@ -922,10 +903,10 @@ const PHOTOS_COULEURS = [
 
   function addColBaseboard(width, x, z, rotY) {
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.12, 0.04),
+      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
       colBaseboardMat
     );
-    bb.position.set(x, 0.06, z);
+    bb.position.set(x, BB_HEIGHT/2, z);
     bb.rotation.y = rotY;
     scene.add(bb);
   }
@@ -940,28 +921,10 @@ const PHOTOS_COULEURS = [
   addColBaseboard(colDoorSegLen, COL_CENTER_X - COL_W/2 + 0.025, COL_CENTER_Z - COL_D/2 + colDoorSegLen/2, Math.PI/2);
   addColBaseboard(colDoorSegLen, COL_CENTER_X - COL_W/2 + 0.025, COL_CENTER_Z + COL_D/2 - colDoorSegLen/2, Math.PI/2);
 
-  // === ÉCLAIRAGE GALERIE COULEURS ===
-  // Lumière naturelle blanche, puits de lumière au plafond
-  const colAmbient = new THREE.AmbientLight(0xffffff, 0.5);
+  // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
+  const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
   scene.add(colAmbient);
-
-  // Plafonniers (rangée de spots encastrés)
-  for (let lx = -COL_W/2 + 1.5; lx <= COL_W/2 - 1.5; lx += 2) {
-    for (let lz = -COL_D/2 + 1.5; lz <= COL_D/2 - 1.5; lz += 2.5) {
-      // Mini disque au plafond
-      const recessed = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.08, 0.04, 12),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
-      );
-      recessed.position.set(COL_CENTER_X + lx, COL_H - 0.02, COL_CENTER_Z + lz);
-      scene.add(recessed);
-      const sp = new THREE.SpotLight(0xfff5e8, 0.5, 8, Math.PI/4, 0.5, 1);
-      sp.position.set(COL_CENTER_X + lx, COL_H - 0.05, COL_CENTER_Z + lz);
-      sp.target.position.set(COL_CENTER_X + lx, 0, COL_CENTER_Z + lz);
-      scene.add(sp);
-      scene.add(sp.target);
-    }
-  }
+  // Pas de plafonniers : la salle est éteinte, seuls les tableaux brillent
 
   // Banquette au centre (style galerie d'art)
   const galleryBench = new THREE.Mesh(
@@ -1103,24 +1066,46 @@ const PHOTOS_COULEURS = [
       frameMargin = 0.1;
     }
 
-    // === Néon rétro-éclairé derrière le cadre (optionnel) ===
+    // === Halo lumineux diffus derrière le cadre (optionnel) ===
+    // Au lieu d'un rectangle plat coloré, on utilise un dégradé radial qui s'estompe
+    // pour donner un effet de lueur réaliste sortant de derrière le tableau.
     if (options.neonColor !== undefined) {
-      const neonW = pw + frameMargin + 0.4;
-      const neonH = ph + frameMargin + 0.4;
-      const neon = new THREE.Mesh(
-        new THREE.PlaneGeometry(neonW, neonH),
+      const haloW = pw + frameMargin + 1.4;
+      const haloH = ph + frameMargin + 1.4;
+
+      // Génération d'une texture avec dégradé radial doux
+      const haloCanvas = document.createElement('canvas');
+      haloCanvas.width = 256; haloCanvas.height = 256;
+      const hctx = haloCanvas.getContext('2d');
+      // Conversion du nombre hex en rgb pour le canvas
+      const c = options.neonColor;
+      const r = (c >> 16) & 0xff;
+      const g = (c >> 8) & 0xff;
+      const b = c & 0xff;
+      const grad = hctx.createRadialGradient(128, 128, 30, 128, 128, 128);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.85)`);
+      grad.addColorStop(0.4, `rgba(${r},${g},${b},0.45)`);
+      grad.addColorStop(0.7, `rgba(${r},${g},${b},0.15)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      hctx.fillStyle = grad;
+      hctx.fillRect(0, 0, 256, 256);
+      const haloTex = new THREE.CanvasTexture(haloCanvas);
+
+      const halo = new THREE.Mesh(
+        new THREE.PlaneGeometry(haloW, haloH),
         new THREE.MeshBasicMaterial({
-          color: options.neonColor,
+          map: haloTex,
           transparent: true,
-          opacity: 0.9
+          depthWrite: false,
+          blending: THREE.AdditiveBlending  // additif = vraie lueur
         })
       );
-      // Un peu derrière le cadre, vers le mur
-      neon.position.z = -0.02;
-      group.add(neon);
-      // Petite lumière qui projette la couleur sur le mur autour du tableau
-      const neonLight = new THREE.PointLight(options.neonColor, 0.7, 2.5, 2);
-      neonLight.position.set(0, 0, -0.15);
+      halo.position.z = -0.005;
+      group.add(halo);
+
+      // Lumière ponctuelle pour que la couleur "déborde" sur le mur autour
+      const neonLight = new THREE.PointLight(options.neonColor, 0.5, 2.0, 2);
+      neonLight.position.set(0, 0, -0.1);
       group.add(neonLight);
     }
 
@@ -1211,7 +1196,7 @@ const PHOTOS_COULEURS = [
   nbPhotoSlots.forEach((s, i) => {
     placePhoto(s[0], s[1], s[2], s[3],
       PHOTOS_NB[i] || { src: '', titre: 'Photo N&B ' + (i+1) },
-      i, 'minimal-white',
+      i, 'minimal-black',
       {
         neonColor: 0xffffff,    // halo blanc derrière (effet néon froid)
         spotlight: true,
@@ -1238,10 +1223,9 @@ const PHOTOS_COULEURS = [
   const colNeonColors = [0xff3a8a, 0x3aaaff, 0x88ee44, 0xff8830, 0xc070ff, 0x40ddcc];
 
   colPhotoSlots.forEach((s, i) => {
-    const style = i === 1 ? 'large' : 'minimal-black';
     placePhoto(s[0], s[1], s[2], s[3],
       PHOTOS_COULEURS[i] || { src: '', titre: 'Photo couleurs ' + (i+1) },
-      i, style,
+      i, 'minimal-black',
       {
         neonColor: colNeonColors[i % colNeonColors.length],
         spotlight: true,
@@ -1433,11 +1417,9 @@ const PHOTOS_COULEURS = [
   const center = new THREE.Vector2(0, 0);
 
   function updateMovement(dt) {
-    // Sensibilité réduite quand on est dans la salle Couleurs (déambulation plus calme)
-    const inColorRoom = camera.position.x > LOBBY_W/2;
-    const speed = inColorRoom ? 2.2 : 3.5;
-    const rotSpeed = inColorRoom ? 1.3 : 2.0;
-    const mouseSensitivity = inColorRoom ? 0.0013 : 0.002;
+    const speed = 3.5;
+    const rotSpeed = 2.0;
+    const mouseSensitivity = 0.002;
 
     const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
