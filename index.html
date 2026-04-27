@@ -796,22 +796,70 @@ const PHOTOS_COULEURS = [
     bb.rotation.y = rotY;
     scene.add(bb);
   }
-  // Mur du fond (-X de la salle, donc x = NB_CENTER_X - NB_W/2)
+  // Mur du fond (-X de la salle, donc x = NB_CENTER_X - NB_W/2) : pas de porte, plinthe pleine
   addNbBaseboard(NB_D, NB_CENTER_X - NB_W/2 + 0.025, NB_CENTER_Z, Math.PI/2);
-  // Mur haut (-Z)
-  addNbBaseboard(NB_W, NB_CENTER_X, NB_CENTER_Z - NB_D/2 + 0.025, 0);
-  // Mur bas (+Z)
-  addNbBaseboard(NB_W, NB_CENTER_X, NB_CENTER_Z + NB_D/2 - 0.025, 0);
+  // Mur haut (-Z) : raccourci côté lobby (x = NB_CENTER_X + NB_W/2) pour ne pas dépasser dans l'encadrement de porte
+  // Le bord côté lobby est à x = NB_CENTER_X + NB_W/2, on s'arrête 0.15m avant
+  const NB_DOOR_FRAME_OFFSET = 0.15;
+  const nbWallSidesLen = NB_W - NB_DOOR_FRAME_OFFSET;
+  addNbBaseboard(nbWallSidesLen, NB_CENTER_X - NB_DOOR_FRAME_OFFSET/2, NB_CENTER_Z - NB_D/2 + 0.025, 0);
+  // Mur bas (+Z) : idem
+  addNbBaseboard(nbWallSidesLen, NB_CENTER_X - NB_DOOR_FRAME_OFFSET/2, NB_CENTER_Z + NB_D/2 - 0.025, 0);
   // Mur droit (côté lobby) — en deux segments à cause de la porte
   const nbDoorSegLen = (NB_D - DOOR_W) / 2;
   addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2, Math.PI/2);
   addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2, Math.PI/2);
 
-  // === ÉCLAIRAGE NB : noir total, seuls les projecteurs sur les tableaux éclairent ===
-  const nbAmbient = new THREE.AmbientLight(0x404050, 0.015);
-  scene.add(nbAmbient);
-  // Pas de lumière d'appoint au plafond — la salle est éteinte
-  // Pas de bandeau LED au sol non plus (retiré sur demande)
+  // === Bandeau néon discret tout autour du plafond ===
+  // Crée 4 fines barres lumineuses sur les arêtes haut-mur, qui soulignent la pièce
+  // sans l'éclairer trop fort.
+  function makeCeilingNeon(centerX, centerZ, w, d, ceilingY, color, opts = {}) {
+    const tubeMat = new THREE.MeshBasicMaterial({ color: color });
+    // Le néon est à 5cm sous le plafond, collé au mur (offset léger)
+    const y = ceilingY - 0.06;
+    const inset = opts.inset ?? 0.05;
+    // Bande du fond (mur -Z)
+    const t1 = new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.1, 0.04, 0.04), tubeMat
+    );
+    t1.position.set(centerX, y, centerZ - d/2 + inset);
+    scene.add(t1);
+    // Bande du devant (+Z)
+    const t2 = new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.1, 0.04, 0.04), tubeMat
+    );
+    t2.position.set(centerX, y, centerZ + d/2 - inset);
+    scene.add(t2);
+    // Bande gauche (-X)
+    const t3 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.04, d - 0.1), tubeMat
+    );
+    t3.position.set(centerX - w/2 + inset, y, centerZ);
+    scene.add(t3);
+    // Bande droite (+X)
+    const t4 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.04, d - 0.1), tubeMat
+    );
+    t4.position.set(centerX + w/2 - inset, y, centerZ);
+    scene.add(t4);
+
+    // Quelques petites lumières réparties pour qu'on voie les murs au plafond
+    // (intensité très faible pour rester dans le noir)
+    const intensity = opts.intensity ?? 0.15;
+    const range = opts.range ?? 3;
+    [
+      [centerX - w/3, y - 0.3, centerZ - d/2 + 0.3],
+      [centerX + w/3, y - 0.3, centerZ - d/2 + 0.3],
+      [centerX - w/3, y - 0.3, centerZ + d/2 - 0.3],
+      [centerX + w/3, y - 0.3, centerZ + d/2 - 0.3],
+    ].forEach(([px, py, pz]) => {
+      const pl = new THREE.PointLight(color, intensity, range, 1.8);
+      pl.position.set(px, py, pz);
+      scene.add(pl);
+    });
+  }
+  // Néon blanc-bleuté très discret au plafond de la salle N&B
+  makeCeilingNeon(NB_CENTER_X, NB_CENTER_Z, NB_W, NB_D, NB_H, 0xa0c0ff, { intensity: 0.12 });
 
   // Banc minimaliste blanc au centre
   const nbBench = new THREE.Mesh(
@@ -910,12 +958,14 @@ const PHOTOS_COULEURS = [
     bb.rotation.y = rotY;
     scene.add(bb);
   }
-  // Mur du fond (+X de la salle, donc x = COL_CENTER_X + COL_W/2)
+  // Mur du fond (+X de la salle) : pas de porte, plinthe pleine
   addColBaseboard(COL_D, COL_CENTER_X + COL_W/2 - 0.025, COL_CENTER_Z, Math.PI/2);
-  // Mur haut (-Z, terracotta)
-  addColBaseboard(COL_W, COL_CENTER_X, COL_CENTER_Z - COL_D/2 + 0.025, 0);
-  // Mur bas (+Z, vert sauge)
-  addColBaseboard(COL_W, COL_CENTER_X, COL_CENTER_Z + COL_D/2 - 0.025, 0);
+  // Mur haut (-Z, terracotta) : raccourci côté lobby (x = COL_CENTER_X - COL_W/2)
+  const COL_DOOR_FRAME_OFFSET = 0.15;
+  const colWallSidesLen = COL_W - COL_DOOR_FRAME_OFFSET;
+  addColBaseboard(colWallSidesLen, COL_CENTER_X + COL_DOOR_FRAME_OFFSET/2, COL_CENTER_Z - COL_D/2 + 0.025, 0);
+  // Mur bas (+Z, vert sauge) : idem
+  addColBaseboard(colWallSidesLen, COL_CENTER_X + COL_DOOR_FRAME_OFFSET/2, COL_CENTER_Z + COL_D/2 - 0.025, 0);
   // Mur côté lobby (deux segments à cause de la porte)
   const colDoorSegLen = (COL_D - DOOR_W) / 2;
   addColBaseboard(colDoorSegLen, COL_CENTER_X - COL_W/2 + 0.025, COL_CENTER_Z - COL_D/2 + colDoorSegLen/2, Math.PI/2);
@@ -924,7 +974,8 @@ const PHOTOS_COULEURS = [
   // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
   const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
   scene.add(colAmbient);
-  // Pas de plafonniers : la salle est éteinte, seuls les tableaux brillent
+  // Bandeau néon blanc-rosé discret au plafond
+  makeCeilingNeon(COL_CENTER_X, COL_CENTER_Z, COL_W, COL_D, COL_H, 0xffe0e8, { intensity: 0.1 });
 
   // Banquette au centre (style galerie d'art)
   const galleryBench = new THREE.Mesh(
@@ -1066,26 +1117,25 @@ const PHOTOS_COULEURS = [
       frameMargin = 0.1;
     }
 
-    // === Halo lumineux diffus derrière le cadre (optionnel) ===
-    // Au lieu d'un rectangle plat coloré, on utilise un dégradé radial qui s'estompe
-    // pour donner un effet de lueur réaliste sortant de derrière le tableau.
+    // === Halo lumineux diffus DERRIÈRE le cadre (optionnel) ===
+    // Le halo est strictement derrière le cadre et déborde autour, sans toucher la photo.
+    // On utilise un blending normal (pas additif) pour ne pas "laver" les couleurs.
     if (options.neonColor !== undefined) {
       const haloW = pw + frameMargin + 1.4;
       const haloH = ph + frameMargin + 1.4;
 
-      // Génération d'une texture avec dégradé radial doux
       const haloCanvas = document.createElement('canvas');
       haloCanvas.width = 256; haloCanvas.height = 256;
       const hctx = haloCanvas.getContext('2d');
-      // Conversion du nombre hex en rgb pour le canvas
       const c = options.neonColor;
       const r = (c >> 16) & 0xff;
       const g = (c >> 8) & 0xff;
       const b = c & 0xff;
-      const grad = hctx.createRadialGradient(128, 128, 30, 128, 128, 128);
-      grad.addColorStop(0, `rgba(${r},${g},${b},0.85)`);
-      grad.addColorStop(0.4, `rgba(${r},${g},${b},0.45)`);
-      grad.addColorStop(0.7, `rgba(${r},${g},${b},0.15)`);
+      // Centre transparent (le cadre va le couvrir), bord coloré qui s'estompe
+      const grad = hctx.createRadialGradient(128, 128, 50, 128, 128, 128);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},0.25)`);
+      grad.addColorStop(0.8, `rgba(${r},${g},${b},0.06)`);
       grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
       hctx.fillStyle = grad;
       hctx.fillRect(0, 0, 256, 256);
@@ -1096,16 +1146,17 @@ const PHOTOS_COULEURS = [
         new THREE.MeshBasicMaterial({
           map: haloTex,
           transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending  // additif = vraie lueur
+          depthWrite: false
+          // Pas de blending additif : on garde une superposition normale
         })
       );
-      halo.position.z = -0.005;
+      // Le halo est juste derrière le cadre (collé au mur)
+      halo.position.z = -0.01;
       group.add(halo);
 
-      // Lumière ponctuelle pour que la couleur "déborde" sur le mur autour
-      const neonLight = new THREE.PointLight(options.neonColor, 0.5, 2.0, 2);
-      neonLight.position.set(0, 0, -0.1);
+      // Petite lumière ponctuelle qui projette la couleur sur le mur autour
+      const neonLight = new THREE.PointLight(options.neonColor, 0.35, 1.8, 2);
+      neonLight.position.set(0, 0, -0.05);
       group.add(neonLight);
     }
 
@@ -1126,33 +1177,98 @@ const PHOTOS_COULEURS = [
     group.rotation.y = rotY;
     scene.add(group);
 
-    // === Spot directionnel sur le tableau (optionnel) ===
-    // Le spot vient depuis l'avant du tableau, légèrement en hauteur
+    // === Spot directionnel sur le tableau + projecteur visible au plafond ===
     if (options.spotlight) {
-      // Direction "vers le tableau" : c'est l'opposé de la normale du mur
-      // Le tableau regarde dans la direction (sin(rotY), 0, cos(rotY))
+      // Direction "vers le tableau" (opposée à la normale du mur où il est accroché)
       const forwardX = Math.sin(rotY);
       const forwardZ = Math.cos(rotY);
-      const spotDist = options.spotDist ?? 1.2;
-      const spotHeight = 0.6;  // au-dessus du tableau
-      const spotColor = options.spotColor ?? 0xffffff;
-      const spotIntensity = options.spotIntensity ?? 1.5;
 
+      const ceilingY = options.ceilingY ?? 4;
+      // Le projecteur est au plafond, légèrement devant le tableau
+      const projOffset = 0.9;  // distance du tableau (vers l'intérieur de la pièce)
+      const projX = x + forwardX * projOffset;
+      const projZ = z + forwardZ * projOffset;
+      const projY = ceilingY - 0.05;
+
+      // Boîtier rectangulaire fixé au plafond
+      const projHousingMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, metalness: 0.6, roughness: 0.4
+      });
+      const projHousing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.1, 0.18),
+        projHousingMat
+      );
+      projHousing.position.set(projX, projY, projZ);
+      scene.add(projHousing);
+
+      // Bras articulé (petit cylindre) qui sort du boîtier
+      const armLen = 0.25;
+      // L'angle d'inclinaison vers le tableau
+      // Pas exact mais visuellement convaincant : le bras pointe vers le tableau
+      const dxToPic = x - projX;
+      const dyToPic = y - (projY - 0.1);
+      const dzToPic = z - projZ;
+      const dist = Math.sqrt(dxToPic*dxToPic + dyToPic*dyToPic + dzToPic*dzToPic);
+      const armCenter = new THREE.Vector3(
+        projX + dxToPic / dist * armLen / 2,
+        (projY - 0.1) + dyToPic / dist * armLen / 2,
+        projZ + dzToPic / dist * armLen / 2
+      );
+      const arm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, armLen, 8),
+        projHousingMat
+      );
+      arm.position.copy(armCenter);
+      // Orientation : du boîtier vers le tableau
+      arm.lookAt(x, y, z);
+      arm.rotateX(Math.PI/2);  // CylinderGeometry est aligné sur Y, lookAt vise sur Z
+      scene.add(arm);
+
+      // Tête du projecteur (cylindre orienté vers le tableau)
+      const headLen = 0.15;
+      const headEnd = new THREE.Vector3(
+        projX + dxToPic / dist * (armLen + headLen / 2),
+        (projY - 0.1) + dyToPic / dist * (armLen + headLen / 2),
+        projZ + dzToPic / dist * (armLen + headLen / 2)
+      );
+      const head = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.08, headLen, 12),
+        projHousingMat
+      );
+      head.position.copy(headEnd);
+      head.lookAt(x, y, z);
+      head.rotateX(Math.PI/2);
+      scene.add(head);
+
+      // Petite "lentille" lumineuse à l'avant
+      const lensEnd = new THREE.Vector3(
+        projX + dxToPic / dist * (armLen + headLen),
+        (projY - 0.1) + dyToPic / dist * (armLen + headLen),
+        projZ + dzToPic / dist * (armLen + headLen)
+      );
+      const spotColor = options.spotColor ?? 0xffffff;
+      const lens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.055, 16),
+        new THREE.MeshBasicMaterial({ color: spotColor })
+      );
+      lens.position.copy(lensEnd);
+      lens.lookAt(x, y, z);
+      scene.add(lens);
+
+      // Le SpotLight lui-même : large cône, distance modérée, pour un éclairage uniforme
+      // On part de la position de la lentille, on vise le tableau
+      const spotIntensity = options.spotIntensity ?? 1.5;
       const spot = new THREE.SpotLight(
-        spotColor, spotIntensity, spotDist + 1.5,
-        Math.PI/6, 0.4, 1.5
+        spotColor, spotIntensity,
+        dist + 1.0,
+        Math.PI/4.5,    // angle large pour couvrir uniformément la photo
+        0.6,            // pénombre douce
+        1.2             // décroissance plus lente que par défaut
       );
-      spot.position.set(
-        x + forwardX * spotDist,
-        y + spotHeight,
-        z + forwardZ * spotDist
-      );
+      spot.position.copy(lensEnd);
       spot.target.position.set(x, y, z);
       scene.add(spot);
       scene.add(spot.target);
-
-      // Petit rail/boitier visible au plafond pour le spot (option ?)
-      // Pour rester simple, on n'ajoute rien de visuel
     }
   }
 
@@ -1198,11 +1314,11 @@ const PHOTOS_COULEURS = [
       PHOTOS_NB[i] || { src: '', titre: 'Photo N&B ' + (i+1) },
       i, 'minimal-black',
       {
-        neonColor: 0xffffff,    // halo blanc derrière (effet néon froid)
+        neonColor: 0xffffff,
         spotlight: true,
         spotColor: 0xffffff,
-        spotIntensity: 2.0,
-        spotDist: 1.4
+        spotIntensity: 2.2,
+        ceilingY: NB_H
       }
     );
   });
@@ -1230,8 +1346,8 @@ const PHOTOS_COULEURS = [
         neonColor: colNeonColors[i % colNeonColors.length],
         spotlight: true,
         spotColor: 0xffffff,
-        spotIntensity: 1.5,
-        spotDist: 1.4
+        spotIntensity: 1.8,
+        ceilingY: COL_H
       }
     );
   });
