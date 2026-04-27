@@ -202,7 +202,7 @@ const PHOTOS_COULEURS = [
   // Pas de fog en intérieur (sauf très léger pour les effets de profondeur)
 
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.05, 100);
-  camera.position.set(0, 1.65, 2.4);  // derrière le fauteuil, dans le lobby
+  camera.position.set(0, 1.65, 0);  // derrière le fauteuil, dans le lobby
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1491,7 +1491,7 @@ const PHOTOS_COULEURS = [
   }
 
   const keys = {};
-  let pitch = 0, yaw = Math.PI; // regarde vers -Z (vers le mur des photos du lobby)
+  let pitch = 0, yaw = 0; // regarde vers -Z (vers le mur des photos du lobby)
   let pointerLocked = false;
 
   // État des joysticks (mobile)
