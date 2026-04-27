@@ -856,16 +856,21 @@ const PHOTOS_COULEURS = [
 
   // 4. Mur côté lobby (droite, x = NB_CENTER_X + NB_W/2) : 2 segments laissant passer la porte
   //    Comme dans le lobby, leurs longueurs vont du coin jusqu'au bord de la porte
-  const nbDoorSegLen = (NB_D - DOOR_W) / 2;
+
+  const FRAME = 0.075;
+
+  const nbDoorSegLen = (NB_D - DOOR_W - 2 * FRAME) / 2;
+
+
   addNbBaseboardZ(
     nbDoorSegLen,
     NB_CENTER_X + NB_W/2 - 0.025,
-    NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2
+    NB_CENTER_Z - NB_D/2 + FRAME + nbDoorSegLen/2
   );
   addNbBaseboardZ(
     nbDoorSegLen,
     NB_CENTER_X + NB_W/2 - 0.025,
-    NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2
+    NB_CENTER_Z + NB_D/2 - FRAME - nbDoorSegLen/2
   );
 
   // === Bandeau néon discret tout autour du plafond ===
