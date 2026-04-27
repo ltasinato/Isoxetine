@@ -858,18 +858,28 @@ const PHOTOS_COULEURS = [
   //    Comme dans le lobby, leurs longueurs vont du coin jusqu'au bord de la porte
 
   
-  const FRAME = 0.075;
-  const nbDoorSegLen = (NB_D - DOOR_W - 2 * FRAME) / 2;
+  const startZ = NB_CENTER_Z - NB_D/2;
+  const endZ   = NB_CENTER_Z - DOOR_W/2 - FRAME;
+  
+  const nbDoorSegLen = endZ - startZ;
+  const centerZ = (startZ + endZ) / 2;
+  
   addNbBaseboardZ(
-   nbDoorSegLen,
-   NB_CENTER_X + NB_W/2 - 0.025, // ❌ ON NE TOUCHE PAS
-   NB_CENTER_Z - NB_D/2 + FRAME + nbDoorSegLen/2
+    nbDoorSegLen,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    centerZ
   );
 
+  const startZ2 = NB_CENTER_Z + DOOR_W/2 + FRAME;
+  const endZ2   = NB_CENTER_Z + NB_D/2;
+  
+  const nbDoorSegLen2 = endZ2 - startZ2;
+  const centerZ2 = (startZ2 + endZ2) / 2;
+  
   addNbBaseboardZ(
-   nbDoorSegLen,
-   NB_CENTER_X + NB_W/2 - 0.025, // ❌ ON NE TOUCHE PAS
-   NB_CENTER_Z + NB_D/2 - FRAME - nbDoorSegLen/2
+    nbDoorSegLen2,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    centerZ2
   );
 
   // === Bandeau néon discret tout autour du plafond ===
