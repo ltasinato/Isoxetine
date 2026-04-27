@@ -202,7 +202,7 @@ const PHOTOS_COULEURS = [
   // Pas de fog en intérieur (sauf très léger pour les effets de profondeur)
 
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.05, 100);
-  camera.position.set(0, 1.65, 3);  // dans le lobby, plus proche du mur du fond
+  camera.position.set(0, 1.65, 2.4);  // derrière le fauteuil, dans le lobby
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -812,49 +812,61 @@ const PHOTOS_COULEURS = [
   scene.add(nbBot);
 
   // === PLINTHES SALLE N&B ===
-  // Approche simple : on pose une plinthe sur chacun des 4 murs.
-  // Il n'y a pas d'encadrement de porte côté salle annexe (l'encadrement est côté lobby uniquement).
-  // Le seul point d'attention : laisser passer l'ouverture de porte sur le mur côté lobby.
+  // Approche identique au lobby :
+  //   - Les plinthes des murs SANS porte (haut, bas, fond) font presque toute la longueur,
+  //     en s'arrêtant 5 cm avant les coins pour ne pas déborder sur les plinthes perpendiculaires.
+  //   - Le mur AVEC porte a 2 segments encadrant l'ouverture.
   const nbBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5 });
+  const BB_T = 0.05;  // épaisseur d'une plinthe (= largeur d'une plinthe perpendiculaire)
 
-  // Helper : plinthe horizontale (le long de l'axe X), rectangle plein, à un Z donné
-  function nbBaseboardX(xMin, xMax, z) {
-    if (xMax - xMin < 0.01) return;
-    const len = xMax - xMin;
+  // Coordonnées des bords de la salle (utilisées aussi pour le placement des photos plus bas)
+  const NB_X_MIN = NB_CENTER_X - NB_W/2;
+  const NB_X_MAX = NB_CENTER_X + NB_W/2;
+  const NB_Z_MIN = NB_CENTER_Z - NB_D/2;
+  const NB_Z_MAX = NB_CENTER_Z + NB_D/2;
+
+  function addNbBaseboardX(width, x, z) {
+    if (width < 0.01) return;
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
+      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
       nbBaseboardMat
     );
-    bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
+    bb.position.set(x, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
-  // Helper : plinthe verticale (le long de l'axe Z), à un X donné
-  function nbBaseboardZ(zMin, zMax, x) {
-    if (zMax - zMin < 0.01) return;
-    const len = zMax - zMin;
+  function addNbBaseboardZ(length, x, z) {
+    if (length < 0.01) return;
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
+      new THREE.BoxGeometry(0.04, BB_HEIGHT, length),
       nbBaseboardMat
     );
-    bb.position.set(x, BB_HEIGHT / 2, (zMin + zMax) / 2);
+    bb.position.set(x, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
 
-  // Coordonnées des bords de la salle N&B
-  const NB_X_MIN = NB_CENTER_X - NB_W/2;   // mur du fond (gauche)
-  const NB_X_MAX = NB_CENTER_X + NB_W/2;   // mur côté lobby (droite)
-  const NB_Z_MIN = NB_CENTER_Z - NB_D/2;   // mur "haut"
-  const NB_Z_MAX = NB_CENTER_Z + NB_D/2;   // mur "bas"
+  // 1. Mur du fond (gauche, x = NB_CENTER_X - NB_W/2) : plinthe sur toute la profondeur,
+  //    sauf les 5 cm de chaque coin (déjà couverts par les plinthes haut et bas)
+  addNbBaseboardZ(NB_D - 2*BB_T, NB_CENTER_X - NB_W/2 + 0.025, NB_CENTER_Z);
 
-  // Mur du fond (mur gauche)
-  nbBaseboardZ(NB_Z_MIN, NB_Z_MAX, NB_X_MIN + 0.025);
-  // Mur haut
-  nbBaseboardX(NB_X_MIN, NB_X_MAX, NB_Z_MIN + 0.025);
-  // Mur bas
-  nbBaseboardX(NB_X_MIN, NB_X_MAX, NB_Z_MAX - 0.025);
-  // Mur côté lobby : 2 segments laissant passer l'ouverture de porte
-  nbBaseboardZ(NB_Z_MIN, NB_CENTER_Z - DOOR_W/2, NB_X_MAX - 0.025);
-  nbBaseboardZ(NB_CENTER_Z + DOOR_W/2, NB_Z_MAX, NB_X_MAX - 0.025);
+  // 2. Mur haut (z = NB_CENTER_Z - NB_D/2) : plinthe sur toute la largeur de la salle
+  addNbBaseboardX(NB_W, NB_CENTER_X, NB_CENTER_Z - NB_D/2 + 0.025);
+
+  // 3. Mur bas (z = NB_CENTER_Z + NB_D/2) : pareil
+  addNbBaseboardX(NB_W, NB_CENTER_X, NB_CENTER_Z + NB_D/2 - 0.025);
+
+  // 4. Mur côté lobby (droite, x = NB_CENTER_X + NB_W/2) : 2 segments laissant passer la porte
+  //    Comme dans le lobby, leurs longueurs vont du coin jusqu'au bord de la porte
+  const nbDoorSegLen = (NB_D - DOOR_W) / 2;
+  addNbBaseboardZ(
+    nbDoorSegLen,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2
+  );
+  addNbBaseboardZ(
+    nbDoorSegLen,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2
+  );
 
   // === Bandeau néon discret tout autour du plafond ===
   // Crée 4 fines barres lumineuses sur les arêtes haut-mur, qui soulignent la pièce
@@ -992,46 +1004,55 @@ const PHOTOS_COULEURS = [
   colLintel.rotation.y = Math.PI/2;
   scene.add(colLintel);
 
-  // === PLINTHES SALLE COULEURS ===
+  // === PLINTHES SALLE COULEURS === (même approche que N&B et lobby)
   const colBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.6 });
 
-  function colBaseboardX(xMin, xMax, z) {
-    if (xMax - xMin < 0.01) return;
-    const len = xMax - xMin;
-    const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
-      colBaseboardMat
-    );
-    bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
-    scene.add(bb);
-  }
-  function colBaseboardZ(zMin, zMax, x) {
-    if (zMax - zMin < 0.01) return;
-    const len = zMax - zMin;
-    const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
-      colBaseboardMat
-    );
-    bb.position.set(x, BB_HEIGHT / 2, (zMin + zMax) / 2);
-    scene.add(bb);
-  }
-
-  // Coordonnées des bords de la salle Couleurs
-  // Ici la porte est sur le mur GAUCHE (-X) qui touche le lobby
+  // Coordonnées des bords (utilisées aussi pour le placement des photos)
   const COL_X_MIN = COL_CENTER_X - COL_W/2;   // mur côté lobby (gauche)
   const COL_X_MAX = COL_CENTER_X + COL_W/2;   // mur du fond (droite)
   const COL_Z_MIN = COL_CENTER_Z - COL_D/2;
   const COL_Z_MAX = COL_CENTER_Z + COL_D/2;
 
-  // Mur du fond (mur droit)
-  colBaseboardZ(COL_Z_MIN, COL_Z_MAX, COL_X_MAX - 0.025);
-  // Mur haut
-  colBaseboardX(COL_X_MIN, COL_X_MAX, COL_Z_MIN + 0.025);
-  // Mur bas
-  colBaseboardX(COL_X_MIN, COL_X_MAX, COL_Z_MAX - 0.025);
-  // Mur côté lobby (gauche) : 2 segments laissant passer l'ouverture de porte
-  colBaseboardZ(COL_Z_MIN, COL_CENTER_Z - DOOR_W/2, COL_X_MIN + 0.025);
-  colBaseboardZ(COL_CENTER_Z + DOOR_W/2, COL_Z_MAX, COL_X_MIN + 0.025);
+  function addColBaseboardX(width, x, z) {
+    if (width < 0.01) return;
+    const bb = new THREE.Mesh(
+      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
+      colBaseboardMat
+    );
+    bb.position.set(x, BB_HEIGHT / 2, z);
+    scene.add(bb);
+  }
+  function addColBaseboardZ(length, x, z) {
+    if (length < 0.01) return;
+    const bb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, BB_HEIGHT, length),
+      colBaseboardMat
+    );
+    bb.position.set(x, BB_HEIGHT / 2, z);
+    scene.add(bb);
+  }
+
+  // 1. Mur du fond (droite) : plinthe sur toute la profondeur, raccourcie aux coins
+  addColBaseboardZ(COL_D - 2*BB_T, COL_X_MAX - 0.025, COL_CENTER_Z);
+
+  // 2. Mur haut : plinthe sur toute la largeur
+  addColBaseboardX(COL_W, COL_CENTER_X, COL_Z_MIN + 0.025);
+
+  // 3. Mur bas : pareil
+  addColBaseboardX(COL_W, COL_CENTER_X, COL_Z_MAX - 0.025);
+
+  // 4. Mur côté lobby (gauche) : 2 segments laissant passer la porte
+  const colDoorSegLen = (COL_D - DOOR_W) / 2;
+  addColBaseboardZ(
+    colDoorSegLen,
+    COL_X_MIN + 0.025,
+    COL_CENTER_Z - COL_D/2 + colDoorSegLen/2
+  );
+  addColBaseboardZ(
+    colDoorSegLen,
+    COL_X_MIN + 0.025,
+    COL_CENTER_Z + COL_D/2 - colDoorSegLen/2
+  );
 
   // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
   const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
@@ -1470,7 +1491,7 @@ const PHOTOS_COULEURS = [
   }
 
   const keys = {};
-  let pitch = 0, yaw = 0; // regarde vers +Z (dos aux photos du lobby, face aux portes des salles)
+  let pitch = 0, yaw = Math.PI; // regarde vers -Z (vers le mur des photos du lobby)
   let pointerLocked = false;
 
   // État des joysticks (mobile)
