@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Ma galerie 3D</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -47,15 +47,70 @@
   #start-screen h1 { font-size: 32px; margin-bottom: 16px; font-weight: 300; letter-spacing: 4px; color: #d8b88a; }
   #start-screen p { font-size: 14px; opacity: 0.85; margin-bottom: 6px; }
   #start-screen .cta { margin-top: 28px; padding: 12px 32px; border: 1px solid #d8b88a; border-radius: 4px; display: inline-block; color: #d8b88a; letter-spacing: 1px; }
+
+  /* Joysticks virtuels pour mobile */
+  .joystick {
+    position: absolute;
+    bottom: 30px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(216, 184, 138, 0.4);
+    z-index: 15;
+    touch-action: none;
+    backdrop-filter: blur(6px);
+    display: none; /* caché par défaut, affiché sur mobile */
+  }
+  .joystick-knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(216, 184, 138, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  #joystick-left { left: 30px; }
+  #joystick-right { right: 30px; }
+
+  /* Sur mobile, on affiche les joysticks et on ajuste l'UI */
+  body.is-mobile .joystick { display: block; }
+  body.is-mobile #info-panel {
+    font-size: 11px;
+    max-width: 200px;
+    padding: 10px 12px;
+  }
+  body.is-mobile #room-indicator {
+    font-size: 10px;
+    padding: 8px 12px;
+  }
+  body.is-mobile #title-overlay {
+    bottom: 170px;
+    font-size: 13px;
+  }
+
+  /* Petits écrans : joysticks plus petits */
+  @media (max-width: 480px) {
+    .joystick { width: 100px; height: 100px; bottom: 20px; }
+    .joystick-knob { width: 42px; height: 42px; }
+    #joystick-left { left: 20px; }
+    #joystick-right { right: 20px; }
+  }
 </style>
 </head>
 <body>
 <div id="canvas-container"></div>
 <div id="info-panel">
   <div class="title">Ma galerie</div>
-  <div>ZQSD / WASD pour se déplacer</div>
-  <div>Souris pour regarder</div>
-  <div>Échap pour libérer la souris</div>
+  <div class="desktop-only">ZQSD / WASD pour se déplacer</div>
+  <div class="desktop-only">Souris pour regarder</div>
+  <div class="desktop-only">Échap pour libérer la souris</div>
+  <div class="mobile-only" style="display:none">Joystick gauche : se déplacer</div>
+  <div class="mobile-only" style="display:none">Joystick droit : regarder</div>
 </div>
 <div id="room-indicator">Lobby</div>
 <div id="title-overlay"></div>
@@ -63,9 +118,18 @@
   <div>
     <h1>GALERIE</h1>
     <p>Trois salles à explorer.</p>
-    <p style="margin-top: 14px;">Déplacement : ZQSD ou WASD — Souris : regarder</p>
-    <div class="cta">Cliquer pour entrer</div>
+    <p style="margin-top: 14px;" class="desktop-only">Déplacement : ZQSD ou WASD — Souris : regarder</p>
+    <p style="margin-top: 14px;" class="mobile-only" style="display:none">Utilise les deux joysticks pour te déplacer et regarder</p>
+    <div class="cta">Toucher pour entrer</div>
   </div>
+</div>
+
+<!-- Joysticks virtuels (visibles uniquement sur mobile) -->
+<div id="joystick-left" class="joystick">
+  <div class="joystick-knob"></div>
+</div>
+<div id="joystick-right" class="joystick">
+  <div class="joystick-knob"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -111,7 +175,7 @@ const PHOTOS_COULEURS = [
   // Pas de fog en intérieur (sauf très léger pour les effets de profondeur)
 
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.05, 100);
-  camera.position.set(0, 1.65, 3);  // dans le lobby
+  camera.position.set(0, 1.65, 7);  // dans le lobby
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1101,32 +1165,133 @@ const PHOTOS_COULEURS = [
   });
 
   // ============================================================
-  // CONTRÔLES FPS
+  // CONTRÔLES — Clavier/Souris (desktop) + Joysticks (mobile)
   // ============================================================
+
+  // Détection mobile (présence d'un écran tactile)
+  const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  if (isMobile) {
+    document.body.classList.add('is-mobile');
+    // Affiche les éléments mobile-only et cache les desktop-only
+    document.querySelectorAll('.mobile-only').forEach(el => el.style.display = '');
+    document.querySelectorAll('.desktop-only').forEach(el => el.style.display = 'none');
+  }
+
   const keys = {};
-  let pitch = 0, yaw = Math.PI; // regarde vers -Z (vers le mur des photos du lobby)
+  let pitch = 0, yaw = Math.PI;
   let pointerLocked = false;
 
-  const canvas = renderer.domElement;
-  canvas.addEventListener('click', () => {
-    canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-    canvas.requestPointerLock();
-  });
-  document.addEventListener('pointerlockchange', () => {
-    pointerLocked = document.pointerLockElement === canvas;
-    if (pointerLocked) startScreen.classList.add('hidden');
-    else startScreen.classList.remove('hidden');
-  });
-  document.addEventListener('mousemove', (e) => {
-    if (!pointerLocked) return;
-    yaw -= e.movementX * 0.002;
-    pitch -= e.movementY * 0.002;
-    pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
-  });
-  window.addEventListener('keydown', (e) => { keys[e.code] = true; });
-  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+  // État des joysticks (mobile)
+  // Chaque joystick renvoie un vecteur 2D entre -1 et 1
+  const joystickLeft = { x: 0, y: 0, active: false, touchId: null };
+  const joystickRight = { x: 0, y: 0, active: false, touchId: null };
 
-  startScreen.addEventListener('click', () => canvas.click());
+  const canvas = renderer.domElement;
+
+  // === Desktop : pointer lock + souris ===
+  if (!isMobile) {
+    canvas.addEventListener('click', () => {
+      canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+      canvas.requestPointerLock();
+    });
+    document.addEventListener('pointerlockchange', () => {
+      pointerLocked = document.pointerLockElement === canvas;
+      if (pointerLocked) startScreen.classList.add('hidden');
+      else startScreen.classList.remove('hidden');
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!pointerLocked) return;
+      yaw -= e.movementX * 0.002;
+      pitch -= e.movementY * 0.002;
+      pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+    });
+    window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    startScreen.addEventListener('click', () => canvas.click());
+  }
+
+  // === Mobile : joysticks tactiles ===
+  if (isMobile) {
+    // L'écran d'accueil disparaît au premier toucher
+    startScreen.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startScreen.classList.add('hidden');
+    });
+
+    function setupJoystick(elementId, joystick) {
+      const el = document.getElementById(elementId);
+      const knob = el.querySelector('.joystick-knob');
+      const rect = () => el.getBoundingClientRect();
+
+      function updateKnob(dx, dy) {
+        const r = rect();
+        const maxR = r.width / 2 - 10;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > maxR) {
+          dx = dx * maxR / dist;
+          dy = dy * maxR / dist;
+        }
+        knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        // Normalisation entre -1 et 1
+        joystick.x = dx / maxR;
+        joystick.y = dy / maxR;
+      }
+
+      function resetKnob() {
+        knob.style.transform = 'translate(-50%, -50%)';
+        joystick.x = 0;
+        joystick.y = 0;
+        joystick.active = false;
+        joystick.touchId = null;
+      }
+
+      el.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        joystick.active = true;
+        joystick.touchId = touch.identifier;
+        const r = rect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        updateKnob(touch.clientX - cx, touch.clientY - cy);
+      });
+
+      // Le mouvement et fin de toucher sont gérés au niveau document
+      // (au cas où le doigt sort de la zone du joystick)
+      document.addEventListener('touchmove', (e) => {
+        if (!joystick.active) return;
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === joystick.touchId) {
+            e.preventDefault();
+            const r = rect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            updateKnob(touch.clientX - cx, touch.clientY - cy);
+          }
+        }
+      }, { passive: false });
+
+      document.addEventListener('touchend', (e) => {
+        if (!joystick.active) return;
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === joystick.touchId) {
+            resetKnob();
+          }
+        }
+      });
+      document.addEventListener('touchcancel', (e) => {
+        if (!joystick.active) return;
+        for (const touch of e.changedTouches) {
+          if (touch.identifier === joystick.touchId) {
+            resetKnob();
+          }
+        }
+      });
+    }
+
+    setupJoystick('joystick-left', joystickLeft);
+    setupJoystick('joystick-right', joystickRight);
+  }
 
   // ============================================================
   // COLLISIONS — Système par "boîtes valides"
@@ -1183,23 +1348,44 @@ const PHOTOS_COULEURS = [
     const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     const move = new THREE.Vector3();
+
+    // === Clavier (desktop) ===
     if (keys['KeyW'] || keys['KeyZ'] || keys['ArrowUp']) move.add(forward);
     if (keys['KeyS'] || keys['ArrowDown']) move.sub(forward);
     if (keys['KeyA'] || keys['KeyQ'] || keys['ArrowLeft']) move.sub(right);
     if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
 
-    if (move.lengthSq() > 0) {
-      move.normalize().multiplyScalar(speed * dt);
+    // === Joystick gauche (mobile) — déplacement ===
+    // joystickLeft.y < 0 = haut = avancer ; joystickLeft.x > 0 = droite
+    if (joystickLeft.active) {
+      // Petite zone morte au centre
+      const dx = Math.abs(joystickLeft.x) > 0.1 ? joystickLeft.x : 0;
+      const dy = Math.abs(joystickLeft.y) > 0.1 ? joystickLeft.y : 0;
+      const f = forward.clone().multiplyScalar(-dy);
+      const r = right.clone().multiplyScalar(dx);
+      move.add(f).add(r);
+    }
 
-      // Tester X et Z séparément pour permettre de glisser le long des murs
+    if (move.lengthSq() > 0) {
+      // Sur joystick on a déjà une intensité, on borne
+      if (move.length() > 1) move.normalize();
+      move.multiplyScalar(speed * dt);
+
       const newX = camera.position.x + move.x;
       const newZ = camera.position.z + move.z;
-      if (isInZone(newX, camera.position.z)) {
-        camera.position.x = newX;
-      }
-      if (isInZone(camera.position.x, newZ)) {
-        camera.position.z = newZ;
-      }
+      if (isInZone(newX, camera.position.z)) camera.position.x = newX;
+      if (isInZone(camera.position.x, newZ)) camera.position.z = newZ;
+    }
+
+    // === Joystick droit (mobile) — rotation caméra ===
+    if (joystickRight.active) {
+      const dx = Math.abs(joystickRight.x) > 0.1 ? joystickRight.x : 0;
+      const dy = Math.abs(joystickRight.y) > 0.1 ? joystickRight.y : 0;
+      // Vitesse de rotation
+      const rotSpeed = 2.0; // radians par seconde à pleine course
+      yaw -= dx * rotSpeed * dt;
+      pitch -= dy * rotSpeed * dt;
+      pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
     }
 
     camera.position.y = 1.65;
