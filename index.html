@@ -173,6 +173,9 @@ const PHOTOS_NB = [
   { src: 'photos/nb/photo4.jpg', titre: 'Photo N&B 4' },
   { src: 'photos/nb/photo5.jpg', titre: 'Photo N&B 5' },
   { src: 'photos/nb/photo6.jpg', titre: 'Photo N&B 6' },
+  { src: 'photos/nb/photo7.jpg', titre: 'Photo N&B 7' },
+  { src: 'photos/nb/photo8.jpg', titre: 'Photo N&B 8' },
+  { src: 'photos/nb/photo9.jpg', titre: 'Photo N&B 9' },
 ];
 
 const PHOTOS_COULEURS = [
@@ -182,6 +185,9 @@ const PHOTOS_COULEURS = [
   { src: 'photos/couleurs/photo4.jpg', titre: 'Photo couleurs 4' },
   { src: 'photos/couleurs/photo5.jpg', titre: 'Photo couleurs 5' },
   { src: 'photos/couleurs/photo6.jpg', titre: 'Photo couleurs 6' },
+  { src: 'photos/couleurs/photo7.jpg', titre: 'Photo couleurs 7' },
+  { src: 'photos/couleurs/photo8.jpg', titre: 'Photo couleurs 8' },
+  { src: 'photos/couleurs/photo9.jpg', titre: 'Photo couleurs 9' },
 ];
 // ============================================================
 
@@ -806,15 +812,15 @@ const PHOTOS_COULEURS = [
   scene.add(nbBot);
 
   // === PLINTHES SALLE N&B ===
-  // On utilise des coordonnées explicites de début/fin pour éviter toute ambiguïté.
-  // Convention : xMin/xMax pour une plinthe horizontale, zMin/zMax pour une plinthe verticale.
+  // Approche simple : on pose une plinthe sur chacun des 4 murs.
+  // Il n'y a pas d'encadrement de porte côté salle annexe (l'encadrement est côté lobby uniquement).
+  // Le seul point d'attention : laisser passer l'ouverture de porte sur le mur côté lobby.
   const nbBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5 });
-  const NB_DOOR_FRAME_OFFSET = 0.15;
 
-  // Pose une plinthe horizontale (le long de l'axe X) à un Z fixe
-  function addNbBaseboardX(xMin, xMax, z) {
+  // Helper : plinthe horizontale (le long de l'axe X), rectangle plein, à un Z donné
+  function nbBaseboardX(xMin, xMax, z) {
+    if (xMax - xMin < 0.01) return;
     const len = xMax - xMin;
-    if (len <= 0) return;
     const bb = new THREE.Mesh(
       new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
       nbBaseboardMat
@@ -822,10 +828,10 @@ const PHOTOS_COULEURS = [
     bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
-  // Pose une plinthe verticale (le long de l'axe Z) à un X fixe
-  function addNbBaseboardZ(zMin, zMax, x) {
+  // Helper : plinthe verticale (le long de l'axe Z), à un X donné
+  function nbBaseboardZ(zMin, zMax, x) {
+    if (zMax - zMin < 0.01) return;
     const len = zMax - zMin;
-    if (len <= 0) return;
     const bb = new THREE.Mesh(
       new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
       nbBaseboardMat
@@ -834,30 +840,21 @@ const PHOTOS_COULEURS = [
     scene.add(bb);
   }
 
-  // Coordonnées clés de la salle
-  const NB_X_MIN = NB_CENTER_X - NB_W/2;        // mur du fond (à gauche dans le repère)
-  const NB_X_MAX = NB_CENTER_X + NB_W/2;        // mur côté lobby (à droite)
-  const NB_Z_MIN = NB_CENTER_Z - NB_D/2;        // mur "haut"
-  const NB_Z_MAX = NB_CENTER_Z + NB_D/2;        // mur "bas"
-  // Position de la porte sur le mur côté lobby
-  const NB_DOOR_Z_MIN = NB_CENTER_Z - DOOR_W/2;
-  const NB_DOOR_Z_MAX = NB_CENTER_Z + DOOR_W/2;
+  // Coordonnées des bords de la salle N&B
+  const NB_X_MIN = NB_CENTER_X - NB_W/2;   // mur du fond (gauche)
+  const NB_X_MAX = NB_CENTER_X + NB_W/2;   // mur côté lobby (droite)
+  const NB_Z_MIN = NB_CENTER_Z - NB_D/2;   // mur "haut"
+  const NB_Z_MAX = NB_CENTER_Z + NB_D/2;   // mur "bas"
 
-  // 1. Mur du fond (-X) : plinthe pleine
-  addNbBaseboardZ(NB_Z_MIN, NB_Z_MAX, NB_X_MIN + 0.025);
-
-  // 2. Mur "haut" (-Z) : du mur du fond jusqu'à l'encadrement de porte côté lobby
-  //    On s'arrête NB_DOOR_FRAME_OFFSET avant le mur côté lobby
-  addNbBaseboardX(NB_X_MIN, NB_X_MAX - NB_DOOR_FRAME_OFFSET, NB_Z_MIN + 0.025);
-
-  // 3. Mur "bas" (+Z) : idem
-  addNbBaseboardX(NB_X_MIN, NB_X_MAX - NB_DOOR_FRAME_OFFSET, NB_Z_MAX - 0.025);
-
-  // 4. Mur côté lobby (+X) : deux segments encadrant la porte
-  //    Segment haut : de NB_Z_MIN + offset jusqu'au bord de la porte
-  //    Segment bas  : du bord de la porte jusqu'à NB_Z_MAX - offset
-  addNbBaseboardZ(NB_Z_MIN + NB_DOOR_FRAME_OFFSET, NB_DOOR_Z_MIN, NB_X_MAX - 0.025);
-  addNbBaseboardZ(NB_DOOR_Z_MAX, NB_Z_MAX - NB_DOOR_FRAME_OFFSET, NB_X_MAX - 0.025);
+  // Mur du fond (mur gauche)
+  nbBaseboardZ(NB_Z_MIN, NB_Z_MAX, NB_X_MIN + 0.025);
+  // Mur haut
+  nbBaseboardX(NB_X_MIN, NB_X_MAX, NB_Z_MIN + 0.025);
+  // Mur bas
+  nbBaseboardX(NB_X_MIN, NB_X_MAX, NB_Z_MAX - 0.025);
+  // Mur côté lobby : 2 segments laissant passer l'ouverture de porte
+  nbBaseboardZ(NB_Z_MIN, NB_CENTER_Z - DOOR_W/2, NB_X_MAX - 0.025);
+  nbBaseboardZ(NB_CENTER_Z + DOOR_W/2, NB_Z_MAX, NB_X_MAX - 0.025);
 
   // === Bandeau néon discret tout autour du plafond ===
   // Crée 4 fines barres lumineuses sur les arêtes haut-mur, qui soulignent la pièce
@@ -997,11 +994,10 @@ const PHOTOS_COULEURS = [
 
   // === PLINTHES SALLE COULEURS ===
   const colBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.6 });
-  const COL_DOOR_FRAME_OFFSET = 0.15;
 
-  function addColBaseboardX(xMin, xMax, z) {
+  function colBaseboardX(xMin, xMax, z) {
+    if (xMax - xMin < 0.01) return;
     const len = xMax - xMin;
-    if (len <= 0) return;
     const bb = new THREE.Mesh(
       new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
       colBaseboardMat
@@ -1009,9 +1005,9 @@ const PHOTOS_COULEURS = [
     bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
-  function addColBaseboardZ(zMin, zMax, x) {
+  function colBaseboardZ(zMin, zMax, x) {
+    if (zMax - zMin < 0.01) return;
     const len = zMax - zMin;
-    if (len <= 0) return;
     const bb = new THREE.Mesh(
       new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
       colBaseboardMat
@@ -1020,28 +1016,22 @@ const PHOTOS_COULEURS = [
     scene.add(bb);
   }
 
-  // Coordonnées clés de la salle Couleurs
+  // Coordonnées des bords de la salle Couleurs
   // Ici la porte est sur le mur GAUCHE (-X) qui touche le lobby
-  // Le mur du fond est à droite (+X)
-  const COL_X_MIN = COL_CENTER_X - COL_W/2;     // mur côté lobby (à gauche)
-  const COL_X_MAX = COL_CENTER_X + COL_W/2;     // mur du fond (à droite)
+  const COL_X_MIN = COL_CENTER_X - COL_W/2;   // mur côté lobby (gauche)
+  const COL_X_MAX = COL_CENTER_X + COL_W/2;   // mur du fond (droite)
   const COL_Z_MIN = COL_CENTER_Z - COL_D/2;
   const COL_Z_MAX = COL_CENTER_Z + COL_D/2;
-  const COL_DOOR_Z_MIN = COL_CENTER_Z - DOOR_W/2;
-  const COL_DOOR_Z_MAX = COL_CENTER_Z + DOOR_W/2;
 
-  // 1. Mur du fond (+X) : plinthe pleine
-  addColBaseboardZ(COL_Z_MIN, COL_Z_MAX, COL_X_MAX - 0.025);
-
-  // 2. Mur "haut" (-Z) : du côté lobby (raccourci) jusqu'au mur du fond
-  addColBaseboardX(COL_X_MIN + COL_DOOR_FRAME_OFFSET, COL_X_MAX, COL_Z_MIN + 0.025);
-
-  // 3. Mur "bas" (+Z) : idem
-  addColBaseboardX(COL_X_MIN + COL_DOOR_FRAME_OFFSET, COL_X_MAX, COL_Z_MAX - 0.025);
-
-  // 4. Mur côté lobby (-X) : deux segments encadrant la porte
-  addColBaseboardZ(COL_Z_MIN + COL_DOOR_FRAME_OFFSET, COL_DOOR_Z_MIN, COL_X_MIN + 0.025);
-  addColBaseboardZ(COL_DOOR_Z_MAX, COL_Z_MAX - COL_DOOR_FRAME_OFFSET, COL_X_MIN + 0.025);
+  // Mur du fond (mur droit)
+  colBaseboardZ(COL_Z_MIN, COL_Z_MAX, COL_X_MAX - 0.025);
+  // Mur haut
+  colBaseboardX(COL_X_MIN, COL_X_MAX, COL_Z_MIN + 0.025);
+  // Mur bas
+  colBaseboardX(COL_X_MIN, COL_X_MAX, COL_Z_MAX - 0.025);
+  // Mur côté lobby (gauche) : 2 segments laissant passer l'ouverture de porte
+  colBaseboardZ(COL_Z_MIN, COL_CENTER_Z - DOOR_W/2, COL_X_MIN + 0.025);
+  colBaseboardZ(COL_CENTER_Z + DOOR_W/2, COL_Z_MAX, COL_X_MIN + 0.025);
 
   // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
   const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
@@ -1395,20 +1385,20 @@ const PHOTOS_COULEURS = [
     scene.add(ptL);
   });
 
-  // === Photos SALLE NB (6 sur les murs autour) ===
-  // 3 sur le mur "haut" (-Z), 3 sur le mur "bas" (+Z), face au centre
-  // mais on a aussi le mur du fond gauche
-  // Disposition : 2 sur chaque mur visible
+  // === Photos SALLE NB (9 réparties sur les murs : 3 fond + 3 haut + 3 bas) ===
   const nbPhotoSlots = [
-    // Mur du fond (gauche)
-    [NB_CENTER_X - NB_W/2 + 0.05, 1.9, NB_CENTER_Z - 2.5, Math.PI/2],
-    [NB_CENTER_X - NB_W/2 + 0.05, 1.9, NB_CENTER_Z, Math.PI/2],
-    [NB_CENTER_X - NB_W/2 + 0.05, 1.9, NB_CENTER_Z + 2.5, Math.PI/2],
-    // Mur haut (-Z)
-    [NB_CENTER_X - 2.5, 1.9, NB_CENTER_Z - NB_D/2 + 0.05, 0],
-    [NB_CENTER_X + 2.5, 1.9, NB_CENTER_Z - NB_D/2 + 0.05, 0],
-    // Mur bas (+Z)
-    [NB_CENTER_X - 2.5, 1.9, NB_CENTER_Z + NB_D/2 - 0.05, Math.PI],
+    // Mur du fond (3 photos, espacées sur la profondeur de 8m)
+    [NB_X_MIN + 0.05, 1.9, NB_CENTER_Z - 2.6, Math.PI/2],
+    [NB_X_MIN + 0.05, 1.9, NB_CENTER_Z + 0.0, Math.PI/2],
+    [NB_X_MIN + 0.05, 1.9, NB_CENTER_Z + 2.6, Math.PI/2],
+    // Mur haut -Z (3 photos espacées sur la largeur de 11m)
+    [NB_CENTER_X - 3.5, 1.9, NB_Z_MIN + 0.05, 0],
+    [NB_CENTER_X - 0.5, 1.9, NB_Z_MIN + 0.05, 0],
+    [NB_CENTER_X + 2.5, 1.9, NB_Z_MIN + 0.05, 0],
+    // Mur bas +Z (3 photos espacées)
+    [NB_CENTER_X - 3.5, 1.9, NB_Z_MAX - 0.05, Math.PI],
+    [NB_CENTER_X - 0.5, 1.9, NB_Z_MAX - 0.05, Math.PI],
+    [NB_CENTER_X + 2.5, 1.9, NB_Z_MAX - 0.05, Math.PI],
   ];
   nbPhotoSlots.forEach((s, i) => {
     placePhoto(s[0], s[1], s[2], s[3],
@@ -1424,20 +1414,33 @@ const PHOTOS_COULEURS = [
     );
   });
 
-  // === Photos GALERIE COULEURS (6 réparties sur les murs colorés) ===
+  // === Photos GALERIE COULEURS (9 réparties sur les murs colorés : 3 fond + 3 haut + 3 bas) ===
   const colPhotoSlots = [
-    // Mur du fond (blanc, +X)
-    [COL_CENTER_X + COL_W/2 - 0.05, 1.9, COL_CENTER_Z - 2.5, -Math.PI/2],
-    [COL_CENTER_X + COL_W/2 - 0.05, 2.4, COL_CENTER_Z, -Math.PI/2],
-    [COL_CENTER_X + COL_W/2 - 0.05, 1.9, COL_CENTER_Z + 2.5, -Math.PI/2],
-    // Mur haut (-Z, terracotta)
-    [COL_CENTER_X - 2.5, 1.9, COL_CENTER_Z - COL_D/2 + 0.05, 0],
-    [COL_CENTER_X + 2, 1.9, COL_CENTER_Z - COL_D/2 + 0.05, 0],
-    // Mur bas (+Z, vert sauge)
-    [COL_CENTER_X + 1, 1.9, COL_CENTER_Z + COL_D/2 - 0.05, Math.PI],
+    // Mur du fond (blanc, +X) — 3 photos espacées sur la profondeur de 9m
+    [COL_X_MAX - 0.05, 1.9, COL_CENTER_Z - 3.0, -Math.PI/2],
+    [COL_X_MAX - 0.05, 1.9, COL_CENTER_Z + 0.0, -Math.PI/2],
+    [COL_X_MAX - 0.05, 1.9, COL_CENTER_Z + 3.0, -Math.PI/2],
+    // Mur haut (-Z, terracotta) — 3 photos
+    [COL_CENTER_X - 3.5, 1.9, COL_Z_MIN + 0.05, 0],
+    [COL_CENTER_X - 0.5, 1.9, COL_Z_MIN + 0.05, 0],
+    [COL_CENTER_X + 2.5, 1.9, COL_Z_MIN + 0.05, 0],
+    // Mur bas (+Z, vert sauge) — 3 photos
+    [COL_CENTER_X - 3.5, 1.9, COL_Z_MAX - 0.05, Math.PI],
+    [COL_CENTER_X - 0.5, 1.9, COL_Z_MAX - 0.05, Math.PI],
+    [COL_CENTER_X + 2.5, 1.9, COL_Z_MAX - 0.05, Math.PI],
   ];
-  // Néons colorés assortis pour chaque tableau de la salle couleurs
-  const colNeonColors = [0xff3a8a, 0x3aaaff, 0x88ee44, 0xff8830, 0xc070ff, 0x40ddcc];
+  // Néons colorés assortis (un par tableau, 9 couleurs distinctes)
+  const colNeonColors = [
+    0xff3a8a,  // rose
+    0x3aaaff,  // bleu
+    0x88ee44,  // vert
+    0xff8830,  // orange
+    0xc070ff,  // violet
+    0x40ddcc,  // turquoise
+    0xffd040,  // jaune doré
+    0xff5050,  // rouge
+    0x50ffaa,  // vert menthe
+  ];
 
   colPhotoSlots.forEach((s, i) => {
     placePhoto(s[0], s[1], s[2], s[3],
