@@ -19,7 +19,7 @@
   }
   #info-panel .title { font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #d8b88a; }
   #room-indicator {
-    position: absolute; top: 16px; right: 16px;
+    position: absolute; top: 16px; right: 70px;
     background: rgba(20,15,10,0.7); color: #d8b88a;
     padding: 10px 18px; border-radius: 8px;
     font-size: 12px; z-index: 10; pointer-events: none;
@@ -27,6 +27,26 @@
     border: 1px solid rgba(200, 170, 130, 0.15);
     letter-spacing: 1px;
     text-transform: uppercase;
+  }
+  #audio-toggle {
+    position: absolute; top: 16px; right: 16px;
+    width: 42px; height: 42px;
+    background: rgba(20,15,10,0.7); color: #d8b88a;
+    border-radius: 8px;
+    z-index: 10; cursor: pointer;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(200, 170, 130, 0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  #audio-toggle:hover { background: rgba(40,30,20,0.85); }
+  #audio-toggle.muted { opacity: 0.5; }
+  #audio-toggle.muted::after {
+    content: ''; position: absolute;
+    width: 26px; height: 2px; background: #d8b88a;
+    transform: rotate(-45deg);
   }
   #title-overlay {
     position: absolute; bottom: 28px; left: 50%;
@@ -113,6 +133,7 @@
   <div class="mobile-only" style="display:none">Joystick droit : regarder</div>
 </div>
 <div id="room-indicator">Lobby</div>
+<div id="audio-toggle" title="Activer / couper la musique">♪</div>
 <div id="title-overlay"></div>
 <div id="start-screen">
   <div>
@@ -798,17 +819,30 @@ const PHOTOS_COULEURS = [
   }
   // Mur du fond (-X de la salle, donc x = NB_CENTER_X - NB_W/2) : pas de porte, plinthe pleine
   addNbBaseboard(NB_D, NB_CENTER_X - NB_W/2 + 0.025, NB_CENTER_Z, Math.PI/2);
-  // Mur haut (-Z) : raccourci côté lobby (x = NB_CENTER_X + NB_W/2) pour ne pas dépasser dans l'encadrement de porte
-  // Le bord côté lobby est à x = NB_CENTER_X + NB_W/2, on s'arrête 0.15m avant
+  // Murs haut (-Z) et bas (+Z) : raccourcis côté lobby (+X de la salle, là où est la porte)
+  // La porte est côté lobby (x = NB_CENTER_X + NB_W/2). On raccourcit de 0.15 m de ce côté.
+  // La plinthe va donc de x = NB_CENTER_X - NB_W/2 (mur du fond) à x = NB_CENTER_X + NB_W/2 - 0.15
+  // Centre = NB_CENTER_X - 0.075, longueur = NB_W - 0.15
   const NB_DOOR_FRAME_OFFSET = 0.15;
   const nbWallSidesLen = NB_W - NB_DOOR_FRAME_OFFSET;
-  addNbBaseboard(nbWallSidesLen, NB_CENTER_X - NB_DOOR_FRAME_OFFSET/2, NB_CENTER_Z - NB_D/2 + 0.025, 0);
-  // Mur bas (+Z) : idem
-  addNbBaseboard(nbWallSidesLen, NB_CENTER_X - NB_DOOR_FRAME_OFFSET/2, NB_CENTER_Z + NB_D/2 - 0.025, 0);
-  // Mur droit (côté lobby) — en deux segments à cause de la porte
-  const nbDoorSegLen = (NB_D - DOOR_W) / 2;
-  addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2, Math.PI/2);
-  addNbBaseboard(nbDoorSegLen, NB_CENTER_X + NB_W/2 - 0.025, NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2, Math.PI/2);
+  const nbWallSidesCenterX = NB_CENTER_X - NB_DOOR_FRAME_OFFSET / 2;
+  addNbBaseboard(nbWallSidesLen, nbWallSidesCenterX, NB_CENTER_Z - NB_D/2 + 0.025, 0);
+  addNbBaseboard(nbWallSidesLen, nbWallSidesCenterX, NB_CENTER_Z + NB_D/2 - 0.025, 0);
+  // Mur droit (côté lobby, x = NB_CENTER_X + NB_W/2) — en deux segments à cause de la porte
+  // Mais ces segments doivent eux-mêmes être raccourcis pour ne pas dépasser dans l'encadrement
+  const nbDoorSegLen = (NB_D - DOOR_W) / 2 - NB_DOOR_FRAME_OFFSET;
+  addNbBaseboard(
+    nbDoorSegLen,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2 + NB_DOOR_FRAME_OFFSET,
+    Math.PI/2
+  );
+  addNbBaseboard(
+    nbDoorSegLen,
+    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2 - NB_DOOR_FRAME_OFFSET,
+    Math.PI/2
+  );
 
   // === Bandeau néon discret tout autour du plafond ===
   // Crée 4 fines barres lumineuses sur les arêtes haut-mur, qui soulignent la pièce
@@ -960,16 +994,28 @@ const PHOTOS_COULEURS = [
   }
   // Mur du fond (+X de la salle) : pas de porte, plinthe pleine
   addColBaseboard(COL_D, COL_CENTER_X + COL_W/2 - 0.025, COL_CENTER_Z, Math.PI/2);
-  // Mur haut (-Z, terracotta) : raccourci côté lobby (x = COL_CENTER_X - COL_W/2)
+  // Murs haut (-Z) et bas (+Z) : raccourcis côté lobby (-X de la salle, là où est la porte)
+  // La plinthe va de x = COL_CENTER_X - COL_W/2 + 0.15 (côté lobby, raccourcie)
+  // à x = COL_CENTER_X + COL_W/2 (mur du fond)
   const COL_DOOR_FRAME_OFFSET = 0.15;
   const colWallSidesLen = COL_W - COL_DOOR_FRAME_OFFSET;
-  addColBaseboard(colWallSidesLen, COL_CENTER_X + COL_DOOR_FRAME_OFFSET/2, COL_CENTER_Z - COL_D/2 + 0.025, 0);
-  // Mur bas (+Z, vert sauge) : idem
-  addColBaseboard(colWallSidesLen, COL_CENTER_X + COL_DOOR_FRAME_OFFSET/2, COL_CENTER_Z + COL_D/2 - 0.025, 0);
-  // Mur côté lobby (deux segments à cause de la porte)
-  const colDoorSegLen = (COL_D - DOOR_W) / 2;
-  addColBaseboard(colDoorSegLen, COL_CENTER_X - COL_W/2 + 0.025, COL_CENTER_Z - COL_D/2 + colDoorSegLen/2, Math.PI/2);
-  addColBaseboard(colDoorSegLen, COL_CENTER_X - COL_W/2 + 0.025, COL_CENTER_Z + COL_D/2 - colDoorSegLen/2, Math.PI/2);
+  const colWallSidesCenterX = COL_CENTER_X + COL_DOOR_FRAME_OFFSET / 2;
+  addColBaseboard(colWallSidesLen, colWallSidesCenterX, COL_CENTER_Z - COL_D/2 + 0.025, 0);
+  addColBaseboard(colWallSidesLen, colWallSidesCenterX, COL_CENTER_Z + COL_D/2 - 0.025, 0);
+  // Mur côté lobby (deux segments à cause de la porte) — segments raccourcis pour ne pas dépasser
+  const colDoorSegLen = (COL_D - DOOR_W) / 2 - COL_DOOR_FRAME_OFFSET;
+  addColBaseboard(
+    colDoorSegLen,
+    COL_CENTER_X - COL_W/2 + 0.025,
+    COL_CENTER_Z - COL_D/2 + colDoorSegLen/2 + COL_DOOR_FRAME_OFFSET,
+    Math.PI/2
+  );
+  addColBaseboard(
+    colDoorSegLen,
+    COL_CENTER_X - COL_W/2 + 0.025,
+    COL_CENTER_Z + COL_D/2 - colDoorSegLen/2 - COL_DOOR_FRAME_OFFSET,
+    Math.PI/2
+  );
 
   // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
   const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
@@ -1366,7 +1412,7 @@ const PHOTOS_COULEURS = [
   }
 
   const keys = {};
-  let pitch = 0, yaw = Math.PI;
+  let pitch = 0, yaw = 0; // regarde vers +Z (dos aux photos du lobby, face aux portes des salles)
   let pointerLocked = false;
 
   // État des joysticks (mobile)
@@ -1596,11 +1642,99 @@ const PHOTOS_COULEURS = [
   }
 
   let currentRoom = 'Lobby';
+
+  // ============================================================
+  // MUSIQUE D'AMBIANCE PAR SALLE
+  // ============================================================
+  // Trois fichiers MP3 attendus dans le dossier audio/
+  // - audio/lobby.mp3 : ambiance feutrée pour le lobby (jazz, lounge, piano…)
+  // - audio/nb.mp3    : ambiance sombre pour la salle Noir & Blanc (ambient, drone…)
+  // - audio/couleurs.mp3 : ambiance vivante pour la salle Couleurs (électro, synth…)
+  // Si un fichier manque, la musique de cette salle est juste désactivée silencieusement.
+
+  const VOLUME_MAX = 0.4;        // volume max après fade-in (0 à 1)
+  const FADE_DURATION = 1500;    // durée du fondu en ms
+
+  const audios = {
+    'Lobby': new Audio('audio/lobby.mp3'),
+    'Salle Noir & Blanc': new Audio('audio/nb.mp3'),
+    'Galerie Couleurs': new Audio('audio/couleurs.mp3'),
+  };
+  Object.values(audios).forEach(a => {
+    a.loop = true;
+    a.volume = 0;
+    a.preload = 'auto';
+  });
+
+  let audioMuted = false;
+  let currentAudio = null;
+  let audioStarted = false;  // tant qu'aucun toucher utilisateur, on ne lance rien
+
+  function fadeAudio(audio, targetVolume, duration) {
+    if (!audio) return;
+    const startVol = audio.volume;
+    const startTime = performance.now();
+    function step() {
+      const t = Math.min(1, (performance.now() - startTime) / duration);
+      audio.volume = startVol + (targetVolume - startVol) * t;
+      if (t < 1) requestAnimationFrame(step);
+      else if (targetVolume === 0) {
+        try { audio.pause(); } catch(e) {}
+      }
+    }
+    if (targetVolume > 0 && audio.paused) {
+      const p = audio.play();
+      if (p && p.catch) p.catch(() => {});
+    }
+    step();
+  }
+
+  function switchAudioToRoom(roomName) {
+    if (!audioStarted || audioMuted) return;
+    const next = audios[roomName];
+    if (next === currentAudio) return;
+    if (currentAudio) fadeAudio(currentAudio, 0, FADE_DURATION);
+    currentAudio = next;
+    if (next) fadeAudio(next, VOLUME_MAX, FADE_DURATION);
+  }
+
+  // Bouton mute / unmute
+  const audioToggle = document.getElementById('audio-toggle');
+  audioToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    audioMuted = !audioMuted;
+    audioToggle.classList.toggle('muted', audioMuted);
+    if (audioMuted) {
+      Object.values(audios).forEach(a => fadeAudio(a, 0, 400));
+      currentAudio = null;
+    } else {
+      switchAudioToRoom(currentRoom);
+    }
+  });
+  // Empêche le clic sur le bouton de relancer le pointer lock
+  audioToggle.addEventListener('mousedown', (e) => e.stopPropagation());
+  audioToggle.addEventListener('touchstart', (e) => e.stopPropagation());
+
+  // Démarrage de l'audio au premier clic / toucher (politique navigateur)
+  function startAudioOnFirstInteraction() {
+    if (audioStarted) return;
+    audioStarted = true;
+    switchAudioToRoom(currentRoom);
+  }
+  if (isMobile) {
+    startScreen.addEventListener('touchstart', startAudioOnFirstInteraction, { once: true });
+  } else {
+    startScreen.addEventListener('click', startAudioOnFirstInteraction, { once: true });
+  }
+  // Fallback : sur le premier vrai click sur le canvas aussi
+  canvas.addEventListener('click', startAudioOnFirstInteraction, { once: true });
   function updateRoomIndicator() {
     const room = getCurrentRoom(camera.position.x, camera.position.z);
     if (room !== currentRoom) {
       currentRoom = room;
       roomIndicator.textContent = room;
+      // Changement de musique d'ambiance avec fondu
+      switchAudioToRoom(room);
     }
   }
 
