@@ -844,27 +844,34 @@ const PHOTOS_COULEURS = [
     scene.add(bb);
   }
 
-  // 1. Mur du fond (gauche, x = NB_CENTER_X - NB_W/2) : plinthe sur toute la profondeur,
+  // L'encadrement de porte côté lobby déborde de ~2.5cm dans la salle annexe.
+  // On raccourcit donc les plinthes haut/bas côté porte pour qu'elles s'arrêtent juste avant.
+  const NB_DOOR_FRAME_INSET = 0.03;  // marge de sécurité
+
+  // 1. Mur du fond (gauche, x = NB_X_MIN) : plinthe sur toute la profondeur,
   //    sauf les 5 cm de chaque coin (déjà couverts par les plinthes haut et bas)
-  addNbBaseboardZ(NB_D - 2*BB_T, NB_CENTER_X - NB_W/2 + 0.025, NB_CENTER_Z);
+  addNbBaseboardZ(NB_D - 2*BB_T, NB_X_MIN + 0.025, NB_CENTER_Z);
 
-  // 2. Mur haut (z = NB_CENTER_Z - NB_D/2) : plinthe sur toute la largeur de la salle
-  addNbBaseboardX(NB_W, NB_CENTER_X, NB_CENTER_Z - NB_D/2 + 0.025);
+  // 2. Mur haut (z = NB_Z_MIN) : plinthe qui s'arrête avant l'encadrement de porte côté lobby
+  //    Va de NB_X_MIN à NB_X_MAX - NB_DOOR_FRAME_INSET
+  const nbWallSidesLen = NB_W - NB_DOOR_FRAME_INSET;
+  const nbWallSidesCenterX = (NB_X_MIN + (NB_X_MAX - NB_DOOR_FRAME_INSET)) / 2;
+  addNbBaseboardX(nbWallSidesLen, nbWallSidesCenterX, NB_Z_MIN + 0.025);
 
-  // 3. Mur bas (z = NB_CENTER_Z + NB_D/2) : pareil
-  addNbBaseboardX(NB_W, NB_CENTER_X, NB_CENTER_Z + NB_D/2 - 0.025);
+  // 3. Mur bas (z = NB_Z_MAX) : pareil
+  addNbBaseboardX(nbWallSidesLen, nbWallSidesCenterX, NB_Z_MAX - 0.025);
 
-  // 4. Mur côté lobby (droite, x = NB_CENTER_X + NB_W/2) : 2 segments laissant passer la porte
-  //    Comme dans le lobby, leurs longueurs vont du coin jusqu'au bord de la porte
+  // 4. Mur côté lobby (droite) : 2 segments laissant passer la porte
+  //    Légèrement en retrait du mur (NB_X_MAX - 0.05) pour éviter le z-fighting avec l'encadrement
   const nbDoorSegLen = (NB_D - DOOR_W) / 2;
   addNbBaseboardZ(
     nbDoorSegLen,
-    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_X_MAX - 0.05,
     NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2
   );
   addNbBaseboardZ(
     nbDoorSegLen,
-    NB_CENTER_X + NB_W/2 - 0.025,
+    NB_X_MAX - 0.05,
     NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2
   );
 
@@ -1032,25 +1039,32 @@ const PHOTOS_COULEURS = [
     scene.add(bb);
   }
 
+  // L'encadrement de porte côté lobby déborde dans la salle Couleurs côté gauche (côté lobby).
+  // On raccourcit donc les plinthes haut/bas côté gauche pour ne pas déborder dans l'encadrement.
+  const COL_DOOR_FRAME_INSET = 0.03;
+
   // 1. Mur du fond (droite) : plinthe sur toute la profondeur, raccourcie aux coins
   addColBaseboardZ(COL_D - 2*BB_T, COL_X_MAX - 0.025, COL_CENTER_Z);
 
-  // 2. Mur haut : plinthe sur toute la largeur
-  addColBaseboardX(COL_W, COL_CENTER_X, COL_Z_MIN + 0.025);
+  // 2. Mur haut : plinthe qui s'arrête avant l'encadrement de porte côté lobby (gauche)
+  //    Va de COL_X_MIN + COL_DOOR_FRAME_INSET à COL_X_MAX
+  const colWallSidesLen = COL_W - COL_DOOR_FRAME_INSET;
+  const colWallSidesCenterX = ((COL_X_MIN + COL_DOOR_FRAME_INSET) + COL_X_MAX) / 2;
+  addColBaseboardX(colWallSidesLen, colWallSidesCenterX, COL_Z_MIN + 0.025);
 
   // 3. Mur bas : pareil
-  addColBaseboardX(COL_W, COL_CENTER_X, COL_Z_MAX - 0.025);
+  addColBaseboardX(colWallSidesLen, colWallSidesCenterX, COL_Z_MAX - 0.025);
 
-  // 4. Mur côté lobby (gauche) : 2 segments laissant passer la porte
+  // 4. Mur côté lobby (gauche) : 2 segments laissant passer la porte (en retrait pour éviter le z-fighting)
   const colDoorSegLen = (COL_D - DOOR_W) / 2;
   addColBaseboardZ(
     colDoorSegLen,
-    COL_X_MIN + 0.025,
+    COL_X_MIN + 0.05,
     COL_CENTER_Z - COL_D/2 + colDoorSegLen/2
   );
   addColBaseboardZ(
     colDoorSegLen,
-    COL_X_MIN + 0.025,
+    COL_X_MIN + 0.05,
     COL_CENTER_Z + COL_D/2 - colDoorSegLen/2
   );
 
