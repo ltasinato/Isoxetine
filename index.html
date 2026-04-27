@@ -805,44 +805,59 @@ const PHOTOS_COULEURS = [
   nbBot.receiveShadow = true;
   scene.add(nbBot);
 
-  // === PLINTHES SALLE N&B (gris foncé pour contraster avec le sol béton) ===
+  // === PLINTHES SALLE N&B ===
+  // On utilise des coordonnées explicites de début/fin pour éviter toute ambiguïté.
+  // Convention : xMin/xMax pour une plinthe horizontale, zMin/zMax pour une plinthe verticale.
   const nbBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.5 });
+  const NB_DOOR_FRAME_OFFSET = 0.15;
 
-  function addNbBaseboard(width, x, z, rotY) {
+  // Pose une plinthe horizontale (le long de l'axe X) à un Z fixe
+  function addNbBaseboardX(xMin, xMax, z) {
+    const len = xMax - xMin;
+    if (len <= 0) return;
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
+      new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
       nbBaseboardMat
     );
-    bb.position.set(x, BB_HEIGHT/2, z);
-    bb.rotation.y = rotY;
+    bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
-  // Mur du fond (-X de la salle, donc x = NB_CENTER_X - NB_W/2) : pas de porte, plinthe pleine
-  addNbBaseboard(NB_D, NB_CENTER_X - NB_W/2 + 0.025, NB_CENTER_Z, Math.PI/2);
-  // Murs haut (-Z) et bas (+Z) : raccourcis côté lobby (+X de la salle, là où est la porte)
-  // La porte est côté lobby (x = NB_CENTER_X + NB_W/2). On raccourcit de 0.15 m de ce côté.
-  // La plinthe va donc de x = NB_CENTER_X - NB_W/2 (mur du fond) à x = NB_CENTER_X + NB_W/2 - 0.15
-  // Centre = NB_CENTER_X - 0.075, longueur = NB_W - 0.15
-  const NB_DOOR_FRAME_OFFSET = 0.15;
-  const nbWallSidesLen = NB_W - NB_DOOR_FRAME_OFFSET;
-  const nbWallSidesCenterX = NB_CENTER_X - NB_DOOR_FRAME_OFFSET / 2;
-  addNbBaseboard(nbWallSidesLen, nbWallSidesCenterX, NB_CENTER_Z - NB_D/2 + 0.025, 0);
-  addNbBaseboard(nbWallSidesLen, nbWallSidesCenterX, NB_CENTER_Z + NB_D/2 - 0.025, 0);
-  // Mur droit (côté lobby, x = NB_CENTER_X + NB_W/2) — en deux segments à cause de la porte
-  // Mais ces segments doivent eux-mêmes être raccourcis pour ne pas dépasser dans l'encadrement
-  const nbDoorSegLen = (NB_D - DOOR_W) / 2 - NB_DOOR_FRAME_OFFSET;
-  addNbBaseboard(
-    nbDoorSegLen,
-    NB_CENTER_X + NB_W/2 - 0.025,
-    NB_CENTER_Z - NB_D/2 + nbDoorSegLen/2 + NB_DOOR_FRAME_OFFSET,
-    Math.PI/2
-  );
-  addNbBaseboard(
-    nbDoorSegLen,
-    NB_CENTER_X + NB_W/2 - 0.025,
-    NB_CENTER_Z + NB_D/2 - nbDoorSegLen/2 - NB_DOOR_FRAME_OFFSET,
-    Math.PI/2
-  );
+  // Pose une plinthe verticale (le long de l'axe Z) à un X fixe
+  function addNbBaseboardZ(zMin, zMax, x) {
+    const len = zMax - zMin;
+    if (len <= 0) return;
+    const bb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
+      nbBaseboardMat
+    );
+    bb.position.set(x, BB_HEIGHT / 2, (zMin + zMax) / 2);
+    scene.add(bb);
+  }
+
+  // Coordonnées clés de la salle
+  const NB_X_MIN = NB_CENTER_X - NB_W/2;        // mur du fond (à gauche dans le repère)
+  const NB_X_MAX = NB_CENTER_X + NB_W/2;        // mur côté lobby (à droite)
+  const NB_Z_MIN = NB_CENTER_Z - NB_D/2;        // mur "haut"
+  const NB_Z_MAX = NB_CENTER_Z + NB_D/2;        // mur "bas"
+  // Position de la porte sur le mur côté lobby
+  const NB_DOOR_Z_MIN = NB_CENTER_Z - DOOR_W/2;
+  const NB_DOOR_Z_MAX = NB_CENTER_Z + DOOR_W/2;
+
+  // 1. Mur du fond (-X) : plinthe pleine
+  addNbBaseboardZ(NB_Z_MIN, NB_Z_MAX, NB_X_MIN + 0.025);
+
+  // 2. Mur "haut" (-Z) : du mur du fond jusqu'à l'encadrement de porte côté lobby
+  //    On s'arrête NB_DOOR_FRAME_OFFSET avant le mur côté lobby
+  addNbBaseboardX(NB_X_MIN, NB_X_MAX - NB_DOOR_FRAME_OFFSET, NB_Z_MIN + 0.025);
+
+  // 3. Mur "bas" (+Z) : idem
+  addNbBaseboardX(NB_X_MIN, NB_X_MAX - NB_DOOR_FRAME_OFFSET, NB_Z_MAX - 0.025);
+
+  // 4. Mur côté lobby (+X) : deux segments encadrant la porte
+  //    Segment haut : de NB_Z_MIN + offset jusqu'au bord de la porte
+  //    Segment bas  : du bord de la porte jusqu'à NB_Z_MAX - offset
+  addNbBaseboardZ(NB_Z_MIN + NB_DOOR_FRAME_OFFSET, NB_DOOR_Z_MIN, NB_X_MAX - 0.025);
+  addNbBaseboardZ(NB_DOOR_Z_MAX, NB_Z_MAX - NB_DOOR_FRAME_OFFSET, NB_X_MAX - 0.025);
 
   // === Bandeau néon discret tout autour du plafond ===
   // Crée 4 fines barres lumineuses sur les arêtes haut-mur, qui soulignent la pièce
@@ -980,42 +995,53 @@ const PHOTOS_COULEURS = [
   colLintel.rotation.y = Math.PI/2;
   scene.add(colLintel);
 
-  // === PLINTHES SALLE COULEURS (bois plus sombre que le sol) ===
+  // === PLINTHES SALLE COULEURS ===
   const colBaseboardMat = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.6 });
+  const COL_DOOR_FRAME_OFFSET = 0.15;
 
-  function addColBaseboard(width, x, z, rotY) {
+  function addColBaseboardX(xMin, xMax, z) {
+    const len = xMax - xMin;
+    if (len <= 0) return;
     const bb = new THREE.Mesh(
-      new THREE.BoxGeometry(width, BB_HEIGHT, 0.04),
+      new THREE.BoxGeometry(len, BB_HEIGHT, 0.04),
       colBaseboardMat
     );
-    bb.position.set(x, BB_HEIGHT/2, z);
-    bb.rotation.y = rotY;
+    bb.position.set((xMin + xMax) / 2, BB_HEIGHT / 2, z);
     scene.add(bb);
   }
-  // Mur du fond (+X de la salle) : pas de porte, plinthe pleine
-  addColBaseboard(COL_D, COL_CENTER_X + COL_W/2 - 0.025, COL_CENTER_Z, Math.PI/2);
-  // Murs haut (-Z) et bas (+Z) : raccourcis côté lobby (-X de la salle, là où est la porte)
-  // La plinthe va de x = COL_CENTER_X - COL_W/2 + 0.15 (côté lobby, raccourcie)
-  // à x = COL_CENTER_X + COL_W/2 (mur du fond)
-  const COL_DOOR_FRAME_OFFSET = 0.15;
-  const colWallSidesLen = COL_W - COL_DOOR_FRAME_OFFSET;
-  const colWallSidesCenterX = COL_CENTER_X + COL_DOOR_FRAME_OFFSET / 2;
-  addColBaseboard(colWallSidesLen, colWallSidesCenterX, COL_CENTER_Z - COL_D/2 + 0.025, 0);
-  addColBaseboard(colWallSidesLen, colWallSidesCenterX, COL_CENTER_Z + COL_D/2 - 0.025, 0);
-  // Mur côté lobby (deux segments à cause de la porte) — segments raccourcis pour ne pas dépasser
-  const colDoorSegLen = (COL_D - DOOR_W) / 2 - COL_DOOR_FRAME_OFFSET;
-  addColBaseboard(
-    colDoorSegLen,
-    COL_CENTER_X - COL_W/2 + 0.025,
-    COL_CENTER_Z - COL_D/2 + colDoorSegLen/2 + COL_DOOR_FRAME_OFFSET,
-    Math.PI/2
-  );
-  addColBaseboard(
-    colDoorSegLen,
-    COL_CENTER_X - COL_W/2 + 0.025,
-    COL_CENTER_Z + COL_D/2 - colDoorSegLen/2 - COL_DOOR_FRAME_OFFSET,
-    Math.PI/2
-  );
+  function addColBaseboardZ(zMin, zMax, x) {
+    const len = zMax - zMin;
+    if (len <= 0) return;
+    const bb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, BB_HEIGHT, len),
+      colBaseboardMat
+    );
+    bb.position.set(x, BB_HEIGHT / 2, (zMin + zMax) / 2);
+    scene.add(bb);
+  }
+
+  // Coordonnées clés de la salle Couleurs
+  // Ici la porte est sur le mur GAUCHE (-X) qui touche le lobby
+  // Le mur du fond est à droite (+X)
+  const COL_X_MIN = COL_CENTER_X - COL_W/2;     // mur côté lobby (à gauche)
+  const COL_X_MAX = COL_CENTER_X + COL_W/2;     // mur du fond (à droite)
+  const COL_Z_MIN = COL_CENTER_Z - COL_D/2;
+  const COL_Z_MAX = COL_CENTER_Z + COL_D/2;
+  const COL_DOOR_Z_MIN = COL_CENTER_Z - DOOR_W/2;
+  const COL_DOOR_Z_MAX = COL_CENTER_Z + DOOR_W/2;
+
+  // 1. Mur du fond (+X) : plinthe pleine
+  addColBaseboardZ(COL_Z_MIN, COL_Z_MAX, COL_X_MAX - 0.025);
+
+  // 2. Mur "haut" (-Z) : du côté lobby (raccourci) jusqu'au mur du fond
+  addColBaseboardX(COL_X_MIN + COL_DOOR_FRAME_OFFSET, COL_X_MAX, COL_Z_MIN + 0.025);
+
+  // 3. Mur "bas" (+Z) : idem
+  addColBaseboardX(COL_X_MIN + COL_DOOR_FRAME_OFFSET, COL_X_MAX, COL_Z_MAX - 0.025);
+
+  // 4. Mur côté lobby (-X) : deux segments encadrant la porte
+  addColBaseboardZ(COL_Z_MIN + COL_DOOR_FRAME_OFFSET, COL_DOOR_Z_MIN, COL_X_MIN + 0.025);
+  addColBaseboardZ(COL_DOOR_Z_MAX, COL_Z_MAX - COL_DOOR_FRAME_OFFSET, COL_X_MIN + 0.025);
 
   // === ÉCLAIRAGE GALERIE COULEURS : noir total, seuls les projecteurs et halos colorés éclairent ===
   const colAmbient = new THREE.AmbientLight(0x504045, 0.02);
@@ -1094,9 +1120,228 @@ const PHOTOS_COULEURS = [
   // ============================================================
   const photoMeshes = [];
 
-  function loadPhotoMaterial(src, idx, options = {}) {
-    const loader = new THREE.TextureLoader();
-    // Placeholder coloré
+  function placePhoto(x, y, z, rotY, photoData, idx, frameStyle = 'classic', options = {}) {
+    const group = new THREE.Group();
+    // Dimension de référence : la plus grande dimension du tableau (cadre inclus très peu)
+    // Avec ce système on garde une taille "cohérente" pour tous les tableaux,
+    // peu importe leur ratio. Un paysage 16:9 fera ~1.8m × 1.0m, un portrait 3:4 fera ~1.35m × 1.8m.
+    const DIM_MAX = options.dimMax ?? 1.8;
+    // Ratio par défaut si on n'a pas encore l'image (utilisé pour le placeholder).
+    // On part sur un format un peu plus large que portrait (3:4 par exemple).
+    let pw = DIM_MAX * 0.75;
+    let ph = DIM_MAX;
+
+    let frameMat;
+    let frameThickness = 0.08;
+    let frameMargin = 0.15;
+
+    if (frameStyle === 'gold') {
+      frameMat = new THREE.MeshStandardMaterial({ color: 0xc8a050, metalness: 0.6, roughness: 0.35 });
+    } else if (frameStyle === 'minimal-white') {
+      frameMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
+      frameThickness = 0.04;
+      frameMargin = 0.06;
+    } else if (frameStyle === 'minimal-black') {
+      frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
+      frameThickness = 0.04;
+      frameMargin = 0.06;
+    } else { // classic
+      frameMat = new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.5 });
+      frameMargin = 0.1;
+    }
+
+    // === Halo (créé avec une taille initiale, ajusté ensuite) ===
+    let halo = null;
+    let neonLight = null;
+    if (options.neonColor !== undefined) {
+      const haloCanvas = document.createElement('canvas');
+      haloCanvas.width = 256; haloCanvas.height = 256;
+      const hctx = haloCanvas.getContext('2d');
+      const c = options.neonColor;
+      const r = (c >> 16) & 0xff;
+      const g = (c >> 8) & 0xff;
+      const b = c & 0xff;
+      const grad = hctx.createRadialGradient(128, 128, 50, 128, 128, 128);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},0.25)`);
+      grad.addColorStop(0.8, `rgba(${r},${g},${b},0.06)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      hctx.fillStyle = grad;
+      hctx.fillRect(0, 0, 256, 256);
+      const haloTex = new THREE.CanvasTexture(haloCanvas);
+      halo = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),  // dimensions ajustées dans updateGeometry
+        new THREE.MeshBasicMaterial({
+          map: haloTex, transparent: true, depthWrite: false
+        })
+      );
+      halo.position.z = -0.01;
+      group.add(halo);
+      neonLight = new THREE.PointLight(options.neonColor, 0.35, 1.8, 2);
+      neonLight.position.set(0, 0, -0.05);
+      group.add(neonLight);
+    }
+
+    // === Cadre + photo (créés avec dimensions par défaut, redimensionnés après chargement) ===
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, frameThickness),
+      frameMat
+    );
+    group.add(frame);
+
+    // Texture de placeholder (en attendant la vraie image)
+    const placeholder = makePlaceholderTexture(idx);
+    const photoMat = new THREE.MeshStandardMaterial({
+      map: placeholder,
+      roughness: 0.5
+    });
+    const photo = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),  // dimensions ajustées plus bas
+      photoMat
+    );
+    photo.position.z = frameThickness/2 + 0.005;
+    photo.userData = { titre: photoData.titre };
+    group.add(photo);
+    photoMeshes.push(photo);
+
+    // Fonction pour calculer/appliquer pw, ph et redimensionner les meshes
+    function applyDimensions(newPw, newPh) {
+      pw = newPw;
+      ph = newPh;
+      // Recrée les géométries (changement de scale serait plus rapide mais moins propre)
+      photo.geometry.dispose();
+      photo.geometry = new THREE.PlaneGeometry(pw, ph);
+      frame.geometry.dispose();
+      frame.geometry = new THREE.BoxGeometry(pw + frameMargin, ph + frameMargin, frameThickness);
+      if (halo) {
+        halo.geometry.dispose();
+        halo.geometry = new THREE.PlaneGeometry(pw + frameMargin + 1.4, ph + frameMargin + 1.4);
+      }
+    }
+    // Initial : ratio par défaut portrait
+    applyDimensions(DIM_MAX * 0.75, DIM_MAX);
+
+    // Charger la vraie image et adapter au ratio réel
+    if (photoData.src) {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        photoData.src,
+        (tex) => {
+          photoMat.map = tex;
+          photoMat.needsUpdate = true;
+          // Calculer les nouvelles dimensions selon le ratio réel
+          const img = tex.image;
+          if (img && img.width && img.height) {
+            const ratio = img.width / img.height;
+            let newPw, newPh;
+            if (ratio >= 1) {
+              // Paysage ou carré : la largeur fait DIM_MAX
+              newPw = DIM_MAX;
+              newPh = DIM_MAX / ratio;
+            } else {
+              // Portrait : la hauteur fait DIM_MAX
+              newPh = DIM_MAX;
+              newPw = DIM_MAX * ratio;
+            }
+            applyDimensions(newPw, newPh);
+          }
+        },
+        undefined,
+        () => { /* échec : on garde le placeholder */ }
+      );
+    }
+
+    group.position.set(x, y, z);
+    group.rotation.y = rotY;
+    scene.add(group);
+
+    // === Spot directionnel sur le tableau + projecteur visible au plafond ===
+    if (options.spotlight) {
+      // Direction "vers le tableau" (opposée à la normale du mur où il est accroché)
+      const forwardX = Math.sin(rotY);
+      const forwardZ = Math.cos(rotY);
+
+      const ceilingY = options.ceilingY ?? 4;
+      const projOffset = 0.9;
+      const projX = x + forwardX * projOffset;
+      const projZ = z + forwardZ * projOffset;
+      const projY = ceilingY - 0.05;
+
+      const projHousingMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, metalness: 0.6, roughness: 0.4
+      });
+      const projHousing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.1, 0.18),
+        projHousingMat
+      );
+      projHousing.position.set(projX, projY, projZ);
+      scene.add(projHousing);
+
+      const armLen = 0.25;
+      const dxToPic = x - projX;
+      const dyToPic = y - (projY - 0.1);
+      const dzToPic = z - projZ;
+      const dist = Math.sqrt(dxToPic*dxToPic + dyToPic*dyToPic + dzToPic*dzToPic);
+      const armCenter = new THREE.Vector3(
+        projX + dxToPic / dist * armLen / 2,
+        (projY - 0.1) + dyToPic / dist * armLen / 2,
+        projZ + dzToPic / dist * armLen / 2
+      );
+      const arm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, armLen, 8),
+        projHousingMat
+      );
+      arm.position.copy(armCenter);
+      arm.lookAt(x, y, z);
+      arm.rotateX(Math.PI/2);
+      scene.add(arm);
+
+      const headLen = 0.15;
+      const headEnd = new THREE.Vector3(
+        projX + dxToPic / dist * (armLen + headLen / 2),
+        (projY - 0.1) + dyToPic / dist * (armLen + headLen / 2),
+        projZ + dzToPic / dist * (armLen + headLen / 2)
+      );
+      const head = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.08, headLen, 12),
+        projHousingMat
+      );
+      head.position.copy(headEnd);
+      head.lookAt(x, y, z);
+      head.rotateX(Math.PI/2);
+      scene.add(head);
+
+      const lensEnd = new THREE.Vector3(
+        projX + dxToPic / dist * (armLen + headLen),
+        (projY - 0.1) + dyToPic / dist * (armLen + headLen),
+        projZ + dzToPic / dist * (armLen + headLen)
+      );
+      const spotColor = options.spotColor ?? 0xffffff;
+      const lens = new THREE.Mesh(
+        new THREE.CircleGeometry(0.055, 16),
+        new THREE.MeshBasicMaterial({ color: spotColor })
+      );
+      lens.position.copy(lensEnd);
+      lens.lookAt(x, y, z);
+      scene.add(lens);
+
+      const spotIntensity = options.spotIntensity ?? 1.5;
+      const spot = new THREE.SpotLight(
+        spotColor, spotIntensity,
+        dist + 1.0,
+        Math.PI/4.5,
+        0.6,
+        1.2
+      );
+      spot.position.copy(lensEnd);
+      spot.target.position.set(x, y, z);
+      scene.add(spot);
+      scene.add(spot.target);
+    }
+  }
+
+  // Helper extrait : génère une texture de placeholder coloré pour les photos manquantes
+  function makePlaceholderTexture(idx) {
     const palettes = [
       ['#d4654a', '#f4a261', '#e9c46a', '#264653'],
       ['#2a9d8f', '#264653', '#e76f51', '#f4a261'],
@@ -1125,197 +1370,7 @@ const PHOTOS_COULEURS = [
     ctx.fillText('Photo ' + (idx+1), 200, 250);
     ctx.font = '16px sans-serif';
     ctx.fillText('Photo manquante', 200, 280);
-    const placeholder = new THREE.CanvasTexture(c);
-
-    const mat = new THREE.MeshStandardMaterial({
-      map: placeholder,
-      roughness: options.roughness ?? 0.5,
-      emissive: options.emissive ?? 0x000000,
-      emissiveIntensity: options.emissiveIntensity ?? 0
-    });
-    if (src) {
-      loader.load(src, (tex) => { mat.map = tex; mat.needsUpdate = true; }, undefined, () => {});
-    }
-    return mat;
-  }
-
-  function placePhoto(x, y, z, rotY, photoData, idx, frameStyle = 'classic', options = {}) {
-    const group = new THREE.Group();
-    const pw = frameStyle === 'large' ? 1.8 : 1.4;
-    const ph = frameStyle === 'large' ? 1.35 : 1.7;
-
-    let frameMat;
-    let frameThickness = 0.08;
-    let frameMargin = 0.15;
-
-    if (frameStyle === 'gold') {
-      frameMat = new THREE.MeshStandardMaterial({ color: 0xc8a050, metalness: 0.6, roughness: 0.35 });
-    } else if (frameStyle === 'minimal-white') {
-      frameMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
-      frameThickness = 0.04;
-      frameMargin = 0.06;
-    } else if (frameStyle === 'minimal-black') {
-      frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
-      frameThickness = 0.04;
-      frameMargin = 0.06;
-    } else { // classic
-      frameMat = new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.5 });
-      frameMargin = 0.1;
-    }
-
-    // === Halo lumineux diffus DERRIÈRE le cadre (optionnel) ===
-    // Le halo est strictement derrière le cadre et déborde autour, sans toucher la photo.
-    // On utilise un blending normal (pas additif) pour ne pas "laver" les couleurs.
-    if (options.neonColor !== undefined) {
-      const haloW = pw + frameMargin + 1.4;
-      const haloH = ph + frameMargin + 1.4;
-
-      const haloCanvas = document.createElement('canvas');
-      haloCanvas.width = 256; haloCanvas.height = 256;
-      const hctx = haloCanvas.getContext('2d');
-      const c = options.neonColor;
-      const r = (c >> 16) & 0xff;
-      const g = (c >> 8) & 0xff;
-      const b = c & 0xff;
-      // Centre transparent (le cadre va le couvrir), bord coloré qui s'estompe
-      const grad = hctx.createRadialGradient(128, 128, 50, 128, 128, 128);
-      grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
-      grad.addColorStop(0.5, `rgba(${r},${g},${b},0.25)`);
-      grad.addColorStop(0.8, `rgba(${r},${g},${b},0.06)`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      hctx.fillStyle = grad;
-      hctx.fillRect(0, 0, 256, 256);
-      const haloTex = new THREE.CanvasTexture(haloCanvas);
-
-      const halo = new THREE.Mesh(
-        new THREE.PlaneGeometry(haloW, haloH),
-        new THREE.MeshBasicMaterial({
-          map: haloTex,
-          transparent: true,
-          depthWrite: false
-          // Pas de blending additif : on garde une superposition normale
-        })
-      );
-      // Le halo est juste derrière le cadre (collé au mur)
-      halo.position.z = -0.01;
-      group.add(halo);
-
-      // Petite lumière ponctuelle qui projette la couleur sur le mur autour
-      const neonLight = new THREE.PointLight(options.neonColor, 0.35, 1.8, 2);
-      neonLight.position.set(0, 0, -0.05);
-      group.add(neonLight);
-    }
-
-    const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(pw + frameMargin, ph + frameMargin, frameThickness),
-      frameMat
-    );
-    group.add(frame);
-
-    const photoMat = loadPhotoMaterial(photoData.src, idx);
-    const photo = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), photoMat);
-    photo.position.z = frameThickness/2 + 0.005;
-    photo.userData = { titre: photoData.titre };
-    group.add(photo);
-    photoMeshes.push(photo);
-
-    group.position.set(x, y, z);
-    group.rotation.y = rotY;
-    scene.add(group);
-
-    // === Spot directionnel sur le tableau + projecteur visible au plafond ===
-    if (options.spotlight) {
-      // Direction "vers le tableau" (opposée à la normale du mur où il est accroché)
-      const forwardX = Math.sin(rotY);
-      const forwardZ = Math.cos(rotY);
-
-      const ceilingY = options.ceilingY ?? 4;
-      // Le projecteur est au plafond, légèrement devant le tableau
-      const projOffset = 0.9;  // distance du tableau (vers l'intérieur de la pièce)
-      const projX = x + forwardX * projOffset;
-      const projZ = z + forwardZ * projOffset;
-      const projY = ceilingY - 0.05;
-
-      // Boîtier rectangulaire fixé au plafond
-      const projHousingMat = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a, metalness: 0.6, roughness: 0.4
-      });
-      const projHousing = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.1, 0.18),
-        projHousingMat
-      );
-      projHousing.position.set(projX, projY, projZ);
-      scene.add(projHousing);
-
-      // Bras articulé (petit cylindre) qui sort du boîtier
-      const armLen = 0.25;
-      // L'angle d'inclinaison vers le tableau
-      // Pas exact mais visuellement convaincant : le bras pointe vers le tableau
-      const dxToPic = x - projX;
-      const dyToPic = y - (projY - 0.1);
-      const dzToPic = z - projZ;
-      const dist = Math.sqrt(dxToPic*dxToPic + dyToPic*dyToPic + dzToPic*dzToPic);
-      const armCenter = new THREE.Vector3(
-        projX + dxToPic / dist * armLen / 2,
-        (projY - 0.1) + dyToPic / dist * armLen / 2,
-        projZ + dzToPic / dist * armLen / 2
-      );
-      const arm = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.025, 0.025, armLen, 8),
-        projHousingMat
-      );
-      arm.position.copy(armCenter);
-      // Orientation : du boîtier vers le tableau
-      arm.lookAt(x, y, z);
-      arm.rotateX(Math.PI/2);  // CylinderGeometry est aligné sur Y, lookAt vise sur Z
-      scene.add(arm);
-
-      // Tête du projecteur (cylindre orienté vers le tableau)
-      const headLen = 0.15;
-      const headEnd = new THREE.Vector3(
-        projX + dxToPic / dist * (armLen + headLen / 2),
-        (projY - 0.1) + dyToPic / dist * (armLen + headLen / 2),
-        projZ + dzToPic / dist * (armLen + headLen / 2)
-      );
-      const head = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.08, headLen, 12),
-        projHousingMat
-      );
-      head.position.copy(headEnd);
-      head.lookAt(x, y, z);
-      head.rotateX(Math.PI/2);
-      scene.add(head);
-
-      // Petite "lentille" lumineuse à l'avant
-      const lensEnd = new THREE.Vector3(
-        projX + dxToPic / dist * (armLen + headLen),
-        (projY - 0.1) + dyToPic / dist * (armLen + headLen),
-        projZ + dzToPic / dist * (armLen + headLen)
-      );
-      const spotColor = options.spotColor ?? 0xffffff;
-      const lens = new THREE.Mesh(
-        new THREE.CircleGeometry(0.055, 16),
-        new THREE.MeshBasicMaterial({ color: spotColor })
-      );
-      lens.position.copy(lensEnd);
-      lens.lookAt(x, y, z);
-      scene.add(lens);
-
-      // Le SpotLight lui-même : large cône, distance modérée, pour un éclairage uniforme
-      // On part de la position de la lentille, on vise le tableau
-      const spotIntensity = options.spotIntensity ?? 1.5;
-      const spot = new THREE.SpotLight(
-        spotColor, spotIntensity,
-        dist + 1.0,
-        Math.PI/4.5,    // angle large pour couvrir uniformément la photo
-        0.6,            // pénombre douce
-        1.2             // décroissance plus lente que par défaut
-      );
-      spot.position.copy(lensEnd);
-      spot.target.position.set(x, y, z);
-      scene.add(spot);
-      scene.add(spot.target);
-    }
+    return new THREE.CanvasTexture(c);
   }
 
   // === Photos LOBBY (4 grandes sur le mur arrière en cadres dorés classiques) ===
